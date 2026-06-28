@@ -6,4 +6,6 @@ pub mod task;
 
 pub use kline::{FetchKlineRequest, KlineQuote};
 pub use stock::{Market, StockQuote};
-pub use task::{FetchKlineParams, FetchStockListParams, RunStatus, TaskType, TriggerType};
+pub use task::{
+    FetchKlineParams, FetchStockListParams, RunStats, RunStatus, TaskType, TriggerType,
+};

@@ -85,10 +85,13 @@ async fn rocket() -> _ {
                 create_task,
                 update_task,
                 delete_task,
+                toggle_task,
                 run_task,
                 refetch_task,
+                next_run,
                 list_runs,
                 get_run,
+                cancel_run,
             ],
         )
         .configure(rocket::Config {

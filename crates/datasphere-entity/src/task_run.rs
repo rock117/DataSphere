@@ -11,6 +11,12 @@ pub struct Model {
     pub started_at: chrono::NaiveDateTime,
     pub finished_at: Option<chrono::NaiveDateTime>,
     pub records_affected: i64,
+    pub success_count: i64,
+    pub failed_count: i64,
+    pub duration_ms: i64,
+    pub total: i64,
+    pub processed: i64,
+    pub cancel_requested: bool,
     pub error: Option<String>,
 }
 

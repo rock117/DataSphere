@@ -133,18 +133,22 @@ curl http://127.0.0.1:8000/api/tasks/1/runs
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/health` | 健康检查 |
+| GET | `/api/datasources` | 列出已注册数据源 |
 | GET | `/api/stocks?page&per_page&q` | 分页查询股票 |
 | GET | `/api/stocks/:code` | 查单只股票 |
 | GET | `/api/klines/:code?start&end` | 查询日K行情 |
-| GET | `/api/tasks` | 列出所有任务 |
+| GET | `/api/tasks` | 列出所有任务（含最近运行摘要） |
 | GET | `/api/tasks/:id` | 查单条任务 |
 | POST | `/api/tasks` | 创建任务 |
 | PUT | `/api/tasks/:id` | 更新任务 |
+| POST | `/api/tasks/:id/toggle` | 一键启停 |
 | DELETE | `/api/tasks/:id` | 删除任务 |
 | POST | `/api/tasks/:id/run` | 手动触发 |
 | POST | `/api/tasks/:id/refetch` | 重新拉取 |
+| GET | `/api/tasks/:id/next_run?count` | 预览下次执行时间 |
 | GET | `/api/tasks/:id/runs?limit` | 执行历史 |
 | GET | `/api/runs/:run_id` | 查单条运行记录 |
+| POST | `/api/runs/:run_id/cancel` | 请求取消运行 |
 
 ## 扩展数据源示例
 

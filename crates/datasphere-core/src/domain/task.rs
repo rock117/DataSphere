@@ -77,6 +77,10 @@ pub enum RunStatus {
     Pending,
     Running,
     Success,
+    /// 部分成功：有成功记录也有失败记录
+    Partial,
+    /// 已取消：用户请求取消，runner 检测到后提前结束
+    Cancelled,
     Failed,
 }
 
@@ -86,6 +90,8 @@ impl RunStatus {
             RunStatus::Pending => "Pending",
             RunStatus::Running => "Running",
             RunStatus::Success => "Success",
+            RunStatus::Partial => "Partial",
+            RunStatus::Cancelled => "Cancelled",
             RunStatus::Failed => "Failed",
         }
     }
@@ -98,6 +104,8 @@ impl std::str::FromStr for RunStatus {
             "Pending" => Ok(RunStatus::Pending),
             "Running" => Ok(RunStatus::Running),
             "Success" => Ok(RunStatus::Success),
+            "Partial" => Ok(RunStatus::Partial),
+            "Cancelled" => Ok(RunStatus::Cancelled),
             "Failed" => Ok(RunStatus::Failed),
             other => Err(crate::error::CoreError::InvalidParams(format!(
                 "unknown run status: {other}"
@@ -132,4 +140,60 @@ pub struct FetchKlineParams {
     /// 指定股票代码列表，空表示全市场（取 stocks 表）
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub codes: Vec<String>,
+}
+
+/// 单次任务运行的统计信息。
+///
+/// runner 在执行过程中累计 success/failed，结束时根据两者关系决定 RunStatus：
+/// - failed == 0        -> Success
+/// - success > 0 && failed > 0 -> Partial
+/// - success == 0 && failed > 0 -> Failed
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RunStats {
+    pub success: usize,
+    pub failed: usize,
+    /// 失败明细（每条失败一个简短描述，用于 error 字段汇总）
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors: Vec<String>,
+    /// 运行耗时（毫秒），由 runner 在结束时计算
+    pub duration_ms: u64,
+}
+
+impl RunStats {
+    pub fn record_success(&mut self, n: usize) {
+        self.success += n;
+    }
+
+    pub fn record_failure(&mut self, msg: impl Into<String>) {
+        self.failed += 1;
+        self.errors.push(msg.into());
+    }
+
+    /// 根据成功/失败数推断最终状态
+    pub fn derive_status(&self) -> RunStatus {
+        if self.failed == 0 {
+            RunStatus::Success
+        } else if self.success > 0 {
+            RunStatus::Partial
+        } else {
+            RunStatus::Failed
+        }
+    }
+
+    /// 拼接错误明细为单条字符串（用于 task_runs.error 字段）
+    pub fn error_summary(&self) -> Option<String> {
+        if self.errors.is_empty() {
+            None
+        } else {
+            Some(format!(
+                "{} failure(s): {}",
+                self.failed,
+                self.errors.join("; ")
+            ))
+        }
+    }
+
+    pub fn total(&self) -> usize {
+        self.success + self.failed
+    }
 }

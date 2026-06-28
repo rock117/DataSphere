@@ -7,11 +7,13 @@ use rocket::serde::json::Json;
 use rocket::{delete, get, post, put, State};
 use std::sync::Arc;
 
-/// 列出所有任务
+/// 列出所有任务（含最近一次运行摘要）
 /// GET /api/tasks
 #[get("/tasks")]
-pub async fn list_tasks(state: &State<AppState>) -> ApiResponse<Vec<task::Model>> {
-    match datasphere_service::task_service::TaskService::list_all(&state.db).await {
+pub async fn list_tasks(
+    state: &State<AppState>,
+) -> ApiResponse<Vec<datasphere_service::task_service::TaskWithLastRun>> {
+    match datasphere_service::task_service::TaskService::list_with_last_run(&state.db).await {
         Ok(tasks) => ApiResponse::ok(tasks),
         Err(e) => ApiResponse::err(format!("{e:#}")),
     }
@@ -168,6 +170,90 @@ pub async fn get_run(state: &State<AppState>, run_id: i64) -> ApiResponse<Option
     match datasphere_service::task_service::TaskService::find_run(&state.db, run_id).await {
         Ok(m) => ApiResponse::ok(m),
         Err(e) => ApiResponse::err(format!("{e:#}")),
+    }
+}
+
+/// 切换任务启用状态（一键开关）
+/// PATCH /api/tasks/:id/toggle
+#[post("/tasks/<id>/toggle")]
+pub async fn toggle_task(state: &State<AppState>, id: i64) -> ApiResponse<Option<task::Model>> {
+    let task = match datasphere_service::task_service::TaskService::find_by_id(&state.db, id).await
+    {
+        Ok(Some(t)) => t,
+        Ok(None) => return ApiResponse::ok(None),
+        Err(e) => return ApiResponse::err(format!("{e:#}")),
+    };
+    let new_enabled = !task.enabled;
+    let input = datasphere_service::task_service::UpdateTaskInput {
+        name: None,
+        cron: None,
+        params: None,
+        enabled: Some(new_enabled),
+    };
+    match datasphere_service::task_service::TaskService::update(&state.db, id, input).await {
+        Ok(Some(m)) => {
+            // 同步调度器：启用且有 cron -> 添加；禁用或无 cron -> 移除
+            let sched = state.scheduler.lock().await;
+            let _ = sched.remove_job(id).await;
+            if m.enabled && m.cron.is_some() {
+                if let Err(e) = sched
+                    .add_job(&m, state.db.clone(), Arc::clone(&state.runner))
+                    .await
+                {
+                    tracing::error!("Failed to add job after toggle: {e:#}");
+                }
+            }
+            ApiResponse::ok(Some(m))
+        }
+        Ok(None) => ApiResponse::ok(None),
+        Err(e) => ApiResponse::err(format!("{e:#}")),
+    }
+}
+
+/// 请求取消某次运行
+/// POST /api/runs/:run_id/cancel
+#[post("/runs/<run_id>/cancel")]
+pub async fn cancel_run(state: &State<AppState>, run_id: i64) -> ApiResponse<bool> {
+    match datasphere_service::task_service::TaskService::request_cancel(&state.db, run_id).await {
+        Ok(ok) => ApiResponse::ok(ok),
+        Err(e) => ApiResponse::err(format!("{e:#}")),
+    }
+}
+
+/// 预览任务的下次执行时间
+/// GET /api/tasks/:id/next_run?count=5
+#[get("/tasks/<id>/next_run?<count>")]
+pub async fn next_run(
+    state: &State<AppState>,
+    id: i64,
+    count: Option<u64>,
+) -> ApiResponse<Vec<String>> {
+    let count = count.unwrap_or(5).clamp(1, 20);
+    let task = match datasphere_service::task_service::TaskService::find_by_id(&state.db, id).await
+    {
+        Ok(Some(t)) => t,
+        Ok(None) => return ApiResponse::ok(vec![]),
+        Err(e) => return ApiResponse::err(format!("{e:#}")),
+    };
+    let Some(cron) = &task.cron else {
+        return ApiResponse::ok(vec![]);
+    };
+    match croner::Cron::new(cron).parse() {
+        Ok(c) => {
+            let mut out = Vec::new();
+            let mut from = chrono::Local::now();
+            for _ in 0..count {
+                match c.find_next_occurrence(&from, false) {
+                    Ok(next) => {
+                        out.push(next.format("%Y-%m-%d %H:%M:%S").to_string());
+                        from = next + chrono::Duration::seconds(1);
+                    }
+                    Err(_) => break,
+                }
+            }
+            ApiResponse::ok(out)
+        }
+        Err(e) => ApiResponse::err(format!("invalid cron: {e}")),
     }
 }
 

@@ -67,6 +67,12 @@ export interface Task {
   enabled: boolean;
   created_at: string;
   updated_at: string;
+  // list_with_last_run 附带的最近运行摘要
+  last_run_id?: number | null;
+  last_run_status?: string | null;
+  last_run_at?: string | null;
+  last_run_success?: number | null;
+  last_run_failed?: number | null;
 }
 
 export interface TaskRun {
@@ -77,6 +83,12 @@ export interface TaskRun {
   started_at: string;
   finished_at: string | null;
   records_affected: number;
+  success_count: number;
+  failed_count: number;
+  duration_ms: number;
+  total: number;
+  processed: number;
+  cancel_requested: boolean;
   error: string | null;
 }
 
@@ -111,13 +123,19 @@ export const api = {
     request<Task | null>({ url: `/tasks/${id}`, method: "PUT", data }),
   deleteTask: (id: number) =>
     request<boolean>({ url: `/tasks/${id}`, method: "DELETE" }),
+  toggleTask: (id: number) =>
+    request<Task | null>({ url: `/tasks/${id}/toggle`, method: "POST" }),
   runTask: (id: number) =>
     request<number>({ url: `/tasks/${id}/run`, method: "POST" }),
   refetchTask: (id: number) =>
     request<number>({ url: `/tasks/${id}/refetch`, method: "POST" }),
+  nextRun: (id: number, count?: number) =>
+    request<string[]>({ url: `/tasks/${id}/next_run`, params: { count } }),
 
   // runs
   listRuns: (taskId: number, limit?: number) =>
     request<TaskRun[]>({ url: `/tasks/${taskId}/runs`, params: { limit } }),
   getRun: (runId: number) => request<TaskRun | null>({ url: `/runs/${runId}` }),
+  cancelRun: (runId: number) =>
+    request<boolean>({ url: `/runs/${runId}/cancel`, method: "POST" }),
 };

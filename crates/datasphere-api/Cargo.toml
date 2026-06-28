@@ -28,3 +28,4 @@ anyhow = { workspace = true }
 dashmap = { workspace = true }
 toml = "0.8"
 dotenvy = "0.15"
+croner = "2"
