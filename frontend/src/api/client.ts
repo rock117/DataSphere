@@ -1,12 +1,13 @@
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from "axios";
 
-const client = axios.create({
-  baseURL: '/api',
+const instance = axios.create({
+  baseURL: "/api",
   timeout: 30000,
 });
 
 // 统一解析 ApiResponse 格式 { ok: { data } } / { err: { error } }
-client.interceptors.response.use(
+// 拦截器把 resp 解包成纯 data 返回，因此 request 包装层返回 Promise<T> 而非 AxiosResponse<T>
+instance.interceptors.response.use(
   (resp) => {
     const body = resp.data;
     if (body && body.ok) return body.ok.data;
@@ -16,10 +17,16 @@ client.interceptors.response.use(
   (error) => {
     const msg = error.response?.data?.err?.error || error.message;
     return Promise.reject(new Error(msg));
-  }
+  },
 );
 
-export default client;
+// 类型安全的请求封装：拦截器已解包，直接返回 T
+async function request<T>(config: AxiosRequestConfig): Promise<T> {
+  return (await instance.request(config)) as unknown as Promise<T>;
+}
+
+export default instance;
+export { request };
 
 // ---- 类型 ----
 
@@ -84,28 +91,33 @@ export interface Paginated<T> {
 
 export const api = {
   // health
-  health: () => client.get<string>('/health'),
+  health: () => request<string>({ url: "/health" }),
 
   // stocks
   listStocks: (params: { page?: number; per_page?: number; q?: string }) =>
-    client.get<Paginated<Stock>>('/stocks', { params }),
-  getStock: (code: string) => client.get<Stock | null>(`/stocks/${code}`),
+    request<Paginated<Stock>>({ url: "/stocks", params }),
+  getStock: (code: string) => request<Stock | null>({ url: `/stocks/${code}` }),
 
   // klines
   getKlines: (code: string, params: { start?: string; end?: string }) =>
-    client.get<Kline[]>(`/klines/${code}`, { params }),
+    request<Kline[]>({ url: `/klines/${code}`, params }),
 
   // tasks
-  listTasks: () => client.get<Task[]>('/tasks'),
-  getTask: (id: number) => client.get<Task | null>(`/tasks/${id}`),
-  createTask: (data: Partial<Task>) => client.post<Task>('/tasks', data),
-  updateTask: (id: number, data: Partial<Task>) => client.put<Task | null>(`/tasks/${id}`, data),
-  deleteTask: (id: number) => client.delete<boolean>(`/tasks/${id}`),
-  runTask: (id: number) => client.post<number>(`/tasks/${id}/run`),
-  refetchTask: (id: number) => client.post<number>(`/tasks/${id}/refetch`),
+  listTasks: () => request<Task[]>({ url: "/tasks" }),
+  getTask: (id: number) => request<Task | null>({ url: `/tasks/${id}` }),
+  createTask: (data: Partial<Task>) =>
+    request<Task>({ url: "/tasks", method: "POST", data }),
+  updateTask: (id: number, data: Partial<Task>) =>
+    request<Task | null>({ url: `/tasks/${id}`, method: "PUT", data }),
+  deleteTask: (id: number) =>
+    request<boolean>({ url: `/tasks/${id}`, method: "DELETE" }),
+  runTask: (id: number) =>
+    request<number>({ url: `/tasks/${id}/run`, method: "POST" }),
+  refetchTask: (id: number) =>
+    request<number>({ url: `/tasks/${id}/refetch`, method: "POST" }),
 
   // runs
   listRuns: (taskId: number, limit?: number) =>
-    client.get<TaskRun[]>(`/tasks/${taskId}/runs`, { params: { limit } }),
-  getRun: (runId: number) => client.get<TaskRun | null>(`/runs/${runId}`),
+    request<TaskRun[]>({ url: `/tasks/${taskId}/runs`, params: { limit } }),
+  getRun: (runId: number) => request<TaskRun | null>({ url: `/runs/${runId}` }),
 };
