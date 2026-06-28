@@ -11,10 +11,12 @@ import {
   ScheduleOutlined,
   StockOutlined,
   LineChartOutlined,
+  FundOutlined,
 } from "@ant-design/icons";
 import Tasks from "./pages/Tasks";
 import TaskRuns from "./pages/TaskRuns";
 import Stocks from "./pages/Stocks";
+import Funds from "./pages/Funds";
 import Klines from "./pages/Klines";
 
 const { Header, Sider, Content } = Layout;
@@ -22,6 +24,7 @@ const { Header, Sider, Content } = Layout;
 const menuItems = [
   { key: "/tasks", icon: <ScheduleOutlined />, label: "任务管理" },
   { key: "/stocks", icon: <StockOutlined />, label: "股票列表" },
+  { key: "/funds", icon: <FundOutlined />, label: "基金列表" },
   { key: "/klines", icon: <LineChartOutlined />, label: "行情查看" },
 ];
 
@@ -66,6 +69,7 @@ function AppLayout() {
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/tasks/:id/runs" element={<TaskRuns />} />
               <Route path="/stocks" element={<Stocks />} />
+              <Route path="/funds" element={<Funds />} />
               <Route path="/klines" element={<Klines />} />
             </Routes>
           </div>

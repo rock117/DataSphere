@@ -136,6 +136,8 @@ curl http://127.0.0.1:8000/api/tasks/1/runs
 | GET | `/api/datasources` | 列出已注册数据源 |
 | GET | `/api/stocks?page&per_page&q` | 分页查询股票 |
 | GET | `/api/stocks/:code` | 查单只股票 |
+| GET | `/api/funds?page&per_page&q` | 分页查询基金 |
+| GET | `/api/funds/:code` | 查单只基金 |
 | GET | `/api/klines/:code?start&end` | 查询日K行情 |
 | GET | `/api/tasks` | 列出所有任务（含最近运行摘要） |
 | GET | `/api/tasks/:id` | 查单条任务 |

@@ -1,5 +1,6 @@
 use datasphere_core::domain::{
-    FetchKlineParams, FetchStockListParams, RunStats, RunStatus, TaskType, TriggerType,
+    FetchFundListParams, FetchKlineParams, FetchStockListParams, RunStats, RunStatus, TaskType,
+    TriggerType,
 };
 use datasphere_core::DataSourceRegistry;
 use datasphere_entity::task;
@@ -7,6 +8,7 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::fund_service::FundService;
 use crate::kline_service::KlineService;
 use crate::stock_service::StockService;
 use crate::task_service::TaskService;
@@ -171,6 +173,38 @@ impl TaskRunner {
                     .ok();
                 tracing::info!(
                     "Stock list done: success={} failed={}",
+                    stats.success,
+                    stats.failed
+                );
+            }
+            TaskType::FetchFundList => {
+                let params: FetchFundListParams = task_model
+                    .params
+                    .as_ref()
+                    .map(|v| serde_json::from_value(v.clone()))
+                    .transpose()?
+                    .unwrap_or_default();
+
+                TaskService::update_progress(&self.db, run_id, 1, 0)
+                    .await
+                    .ok();
+
+                tracing::info!("Fetching fund list via provider={}", task_model.provider);
+                if Self::is_cancelled(&self.db, run_id).await {
+                    return Ok(stats);
+                }
+                match source.fetch_fund_list(&params).await {
+                    Ok(quotes) => match FundService::upsert_many(&self.db, &quotes).await {
+                        Ok(n) => stats.record_success(n),
+                        Err(e) => stats.record_failure(format!("upsert fund list: {e:#}")),
+                    },
+                    Err(e) => stats.record_failure(format!("fetch fund list: {e:#}")),
+                }
+                TaskService::update_progress(&self.db, run_id, 1, 1)
+                    .await
+                    .ok();
+                tracing::info!(
+                    "Fund list done: success={} failed={}",
                     stats.success,
                     stats.failed
                 );

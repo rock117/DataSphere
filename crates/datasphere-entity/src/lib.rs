@@ -1,3 +1,4 @@
+pub mod fund;
 pub mod kline;
 pub mod stock;
 pub mod task;

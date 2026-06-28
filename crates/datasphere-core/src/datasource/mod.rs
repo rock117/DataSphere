@@ -10,7 +10,7 @@ pub mod registry;
 pub use mock::MockDataSource;
 pub use registry::DataSourceRegistry;
 
-use crate::domain::{FetchKlineRequest, KlineQuote, StockQuote};
+use crate::domain::{FetchFundListParams, FetchKlineRequest, FundQuote, KlineQuote, StockQuote};
 use crate::error::Result;
 use async_trait::async_trait;
 
@@ -18,6 +18,9 @@ use async_trait::async_trait;
 ///
 /// 实现此 trait 即可接入新的数据源（如 Tushare、AKShare、Yahoo Finance 等），
 /// 然后在 `DataSourceRegistry` 中注册，任务通过 `provider` 字段选择数据源。
+///
+/// 新增数据类型时，在 trait 上加方法并给一个默认实现（返回不支持错误），
+/// 这样已有的数据源实现不需要改动，只在支持新类型的数据源里 override。
 #[async_trait]
 pub trait DataSource: Send + Sync + 'static {
     /// 数据源名称，用于在 Registry 中查找（如 "mock"、"tushare"）
@@ -28,6 +31,14 @@ pub trait DataSource: Send + Sync + 'static {
         &self,
         params: &crate::domain::FetchStockListParams,
     ) -> Result<Vec<StockQuote>>;
+
+    /// 拉取基金列表
+    async fn fetch_fund_list(&self, _params: &FetchFundListParams) -> Result<Vec<FundQuote>> {
+        Err(crate::error::CoreError::DataSource(format!(
+            "data source '{}' does not support fetch_fund_list",
+            self.name()
+        )))
+    }
 
     /// 拉取单只股票的日K历史行情
     async fn fetch_kline(&self, req: &FetchKlineRequest) -> Result<Vec<KlineQuote>>;

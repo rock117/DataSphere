@@ -92,6 +92,19 @@ export interface TaskRun {
   error: string | null;
 }
 
+export interface Fund {
+  id: number;
+  code: string;
+  name: string;
+  fund_type: string;
+  management: string;
+  custodian: string;
+  setup_date: string | null;
+  latest_scale: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Paginated<T> {
   items: T[];
   total: number;
@@ -109,6 +122,11 @@ export const api = {
   listStocks: (params: { page?: number; per_page?: number; q?: string }) =>
     request<Paginated<Stock>>({ url: "/stocks", params }),
   getStock: (code: string) => request<Stock | null>({ url: `/stocks/${code}` }),
+
+  // funds
+  listFunds: (params: { page?: number; per_page?: number; q?: string }) =>
+    request<Paginated<Fund>>({ url: "/funds", params }),
+  getFund: (code: string) => request<Fund | null>({ url: `/funds/${code}` }),
 
   // klines
   getKlines: (code: string, params: { start?: string; end?: string }) =>

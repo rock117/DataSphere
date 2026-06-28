@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "PascalCase")]
 pub enum TaskType {
     FetchStockList,
+    FetchFundList,
     FetchKline,
 }
 
@@ -12,6 +13,7 @@ impl TaskType {
     pub fn as_str(&self) -> &'static str {
         match self {
             TaskType::FetchStockList => "FetchStockList",
+            TaskType::FetchFundList => "FetchFundList",
             TaskType::FetchKline => "FetchKline",
         }
     }
@@ -22,6 +24,7 @@ impl std::str::FromStr for TaskType {
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             "FetchStockList" => Ok(TaskType::FetchStockList),
+            "FetchFundList" => Ok(TaskType::FetchFundList),
             "FetchKline" => Ok(TaskType::FetchKline),
             other => Err(crate::error::CoreError::InvalidTaskType(other.to_string())),
         }
@@ -126,6 +129,14 @@ pub struct FetchStockListParams {
     /// 可选：仅拉取指定市场，None 表示全市场
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub market: Option<super::Market>,
+}
+
+/// FetchFundList 任务的参数结构
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FetchFundListParams {
+    /// 可选：仅拉取指定基金类型，None 表示全类型
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fund_type: Option<super::FundType>,
 }
 
 /// FetchKline 任务的参数结构
