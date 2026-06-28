@@ -188,7 +188,8 @@ impl TaskService {
             am.success_count = Set(stats.success as i64);
             am.failed_count = Set(stats.failed as i64);
             am.duration_ms = Set(stats.duration_ms as i64);
-            am.processed = Set(stats.total() as i64);
+            // 注意：processed / total 由 runner 在执行过程中通过 update_progress 设置，
+            // 这里不覆盖，避免把"处理单元数"和"落库记录数"混淆。
             am.error = Set(error);
             am.update(db).await?;
         }
