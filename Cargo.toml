@@ -29,6 +29,7 @@ sea-orm = { version = "2.0.0-rc.40", features = [
     "with-chrono",
     "with-json",
     "with-uuid",
+    "with-rust_decimal",
 ] }
 
 # Scheduler
@@ -49,6 +50,7 @@ anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 rand = "0.8"
+rust_decimal = { version = "1", features = ["serde", "serde-float"] }
 
 # Internal crates
 datasphere-core = { path = "crates/datasphere-core" }

@@ -711,6 +711,7 @@ name = "datasphere-entity"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "rust_decimal",
  "sea-orm",
  "serde",
 ]
@@ -746,6 +747,7 @@ dependencies = [
  "dashmap",
  "datasphere-core",
  "datasphere-entity",
+ "rust_decimal",
  "sea-orm",
  "serde",
  "serde_json",

@@ -1,3 +1,4 @@
+use rust_decimal::Decimal;
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, serde::Serialize)]
@@ -7,14 +8,14 @@ pub struct Model {
     pub id: i64,
     pub code: String,
     pub date: chrono::NaiveDate,
-    pub open: f64,
-    pub close: f64,
-    pub high: f64,
-    pub low: f64,
+    pub open: Decimal,
+    pub close: Decimal,
+    pub high: Decimal,
+    pub low: Decimal,
     pub volume: i64,
-    pub amount: f64,
-    pub turnover: Option<f64>,
-    pub pct_change: Option<f64>,
+    pub amount: Decimal,
+    pub turnover: Option<Decimal>,
+    pub pct_change: Option<Decimal>,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
 }

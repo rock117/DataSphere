@@ -1,9 +1,15 @@
 use datasphere_core::domain::KlineQuote;
 use datasphere_entity::kline;
+use rust_decimal::Decimal;
 use sea_orm::entity::prelude::*;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
 
 pub struct KlineService;
+
+/// f64 -> Decimal 转换（金融数据用定点数避免精度丢失）
+fn to_decimal(v: f64) -> Decimal {
+    Decimal::try_from(v).unwrap_or_default()
+}
 
 impl KlineService {
     /// 按 (code, date) upsert 单条日K（存在则更新，不存在则插入）
@@ -16,27 +22,27 @@ impl KlineService {
 
         if let Some(m) = existing {
             let mut am: kline::ActiveModel = m.into();
-            am.open = Set(k.open);
-            am.close = Set(k.close);
-            am.high = Set(k.high);
-            am.low = Set(k.low);
+            am.open = Set(to_decimal(k.open));
+            am.close = Set(to_decimal(k.close));
+            am.high = Set(to_decimal(k.high));
+            am.low = Set(to_decimal(k.low));
             am.volume = Set(k.volume);
-            am.amount = Set(k.amount);
-            am.turnover = Set(k.turnover);
-            am.pct_change = Set(k.pct_change);
+            am.amount = Set(to_decimal(k.amount));
+            am.turnover = Set(k.turnover.map(to_decimal));
+            am.pct_change = Set(k.pct_change.map(to_decimal));
             am.update(db).await?;
         } else {
             let am = kline::ActiveModel {
                 code: Set(k.code.clone()),
                 date: Set(k.date),
-                open: Set(k.open),
-                close: Set(k.close),
-                high: Set(k.high),
-                low: Set(k.low),
+                open: Set(to_decimal(k.open)),
+                close: Set(to_decimal(k.close)),
+                high: Set(to_decimal(k.high)),
+                low: Set(to_decimal(k.low)),
                 volume: Set(k.volume),
-                amount: Set(k.amount),
-                turnover: Set(k.turnover),
-                pct_change: Set(k.pct_change),
+                amount: Set(to_decimal(k.amount)),
+                turnover: Set(k.turnover.map(to_decimal)),
+                pct_change: Set(k.pct_change.map(to_decimal)),
                 ..Default::default()
             };
             am.insert(db).await?;
