@@ -13,6 +13,7 @@ import {
   LineChartOutlined,
 } from "@ant-design/icons";
 import Tasks from "./pages/Tasks";
+import TaskRuns from "./pages/TaskRuns";
 import Stocks from "./pages/Stocks";
 import Klines from "./pages/Klines";
 
@@ -46,7 +47,11 @@ function AppLayout() {
           theme="dark"
           mode="inline"
           items={menuItems}
-          selectedKeys={[location.pathname]}
+          selectedKeys={[
+            location.pathname.startsWith("/tasks")
+              ? "/tasks"
+              : location.pathname,
+          ]}
           onClick={({ key }) => navigate(key)}
         />
       </Sider>
@@ -59,6 +64,7 @@ function AppLayout() {
             <Routes>
               <Route path="/" element={<Navigate to="/tasks" replace />} />
               <Route path="/tasks" element={<Tasks />} />
+              <Route path="/tasks/:id/runs" element={<TaskRuns />} />
               <Route path="/stocks" element={<Stocks />} />
               <Route path="/klines" element={<Klines />} />
             </Routes>

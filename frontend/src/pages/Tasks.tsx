@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Table,
   Button,
@@ -10,8 +11,6 @@ import {
   Space,
   Tag,
   message,
-  Drawer,
-  Progress,
 } from "antd";
 import {
   PlusOutlined,
@@ -52,15 +51,7 @@ export default function Tasks() {
   const [editTask, setEditTask] = useState<Task | null>(null);
   const [form] = Form.useForm();
   const [nextRuns, setNextRuns] = useState<string[]>([]);
-  const [runsDrawer, setRunsDrawer] = useState<{
-    open: boolean;
-    task: Task | null;
-    runs: TaskRun[];
-  }>({
-    open: false,
-    task: null,
-    runs: [],
-  });
+  const navigate = useNavigate();
 
   const load = async () => {
     setLoading(true);
@@ -161,58 +152,6 @@ export default function Tasks() {
       },
     });
   };
-
-  const viewRuns = async (task: Task) => {
-    try {
-      const runs = await api.listRuns(task.id, 50);
-      setRunsDrawer({ open: true, task, runs });
-    } catch (e: any) {
-      message.error(e.message);
-    }
-  };
-
-  const cancelRun = async (runId: number) => {
-    try {
-      const ok = await api.cancelRun(runId);
-      if (ok) {
-        message.success("已请求取消");
-        refreshRuns();
-      } else {
-        message.warning("无法取消（可能已结束）");
-      }
-    } catch (e: any) {
-      message.error(e.message);
-    }
-  };
-
-  // Drawer 打开时，若有 Running 状态的 run，自动刷新
-  const refreshRuns = async () => {
-    if (!runsDrawer.task) return;
-    try {
-      const runs = await api.listRuns(runsDrawer.task.id, 50);
-      setRunsDrawer({ open: true, task: runsDrawer.task, runs });
-    } catch {
-      // ignore
-    }
-  };
-
-  const hasRunning = runsDrawer.runs.some((r) => r.status === "Running");
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    if (runsDrawer.open && hasRunning) {
-      timerRef.current = setInterval(refreshRuns, 2000);
-    } else if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runsDrawer.open, hasRunning]);
 
   // cron 预览：编辑已有任务时，根据 cron 字段实时拉取下次执行时间
   const previewNextRuns = async (cron: string) => {
@@ -316,7 +255,7 @@ export default function Tasks() {
           <Button
             size="small"
             icon={<EyeOutlined />}
-            onClick={() => viewRuns(r)}
+            onClick={() => navigate(`/tasks/${r.id}/runs`)}
           >
             历史
           </Button>
@@ -422,96 +361,6 @@ export default function Tasks() {
           </Form.Item>
         </Form>
       </Modal>
-
-      <Drawer
-        title={
-          runsDrawer.task
-            ? `执行历史 - #${runsDrawer.task.id} ${runsDrawer.task.name}`
-            : "执行历史"
-        }
-        open={runsDrawer.open}
-        onClose={() => setRunsDrawer({ open: false, task: null, runs: [] })}
-        width={720}
-      >
-        <Table
-          rowKey="id"
-          size="small"
-          dataSource={runsDrawer.runs}
-          pagination={{ pageSize: 20 }}
-          columns={[
-            { title: "Run ID", dataIndex: "id", width: 70 },
-            {
-              title: "状态",
-              dataIndex: "status",
-              width: 90,
-              render: (s: string) => <Tag color={statusColor[s]}>{s}</Tag>,
-            },
-            { title: "触发", dataIndex: "trigger_type", width: 80 },
-            { title: "开始", dataIndex: "started_at", width: 160 },
-            {
-              title: "完成",
-              dataIndex: "finished_at",
-              width: 160,
-              render: (v: string | null) => v || "-",
-            },
-            {
-              title: "进度",
-              width: 140,
-              render: (_: unknown, r: TaskRun) => {
-                if (r.status === "Running") {
-                  const pct =
-                    r.total > 0 ? Math.round((r.processed / r.total) * 100) : 0;
-                  return (
-                    <Progress
-                      percent={r.cancel_requested ? 100 : pct}
-                      size="small"
-                      status={r.cancel_requested ? "exception" : "active"}
-                      format={() => `${r.processed}/${r.total || "?"}`}
-                    />
-                  );
-                }
-                if (r.total > 0) return `${r.processed}/${r.total}`;
-                return "-";
-              },
-            },
-            {
-              title: "耗时",
-              dataIndex: "duration_ms",
-              width: 80,
-              render: (v: number) => fmtDuration(v),
-            },
-            {
-              title: "成功",
-              dataIndex: "success_count",
-              width: 70,
-              render: (v: number) =>
-                v > 0 ? <span style={{ color: "#52c41a" }}>{v}</span> : v,
-            },
-            {
-              title: "失败",
-              dataIndex: "failed_count",
-              width: 70,
-              render: (v: number) =>
-                v > 0 ? <span style={{ color: "#f5222d" }}>{v}</span> : v,
-            },
-            {
-              title: "错误",
-              dataIndex: "error",
-              render: (v: string | null) => v || "-",
-            },
-            {
-              title: "操作",
-              width: 80,
-              render: (_: unknown, r: TaskRun) =>
-                r.status === "Running" && !r.cancel_requested ? (
-                  <Button size="small" danger onClick={() => cancelRun(r.id)}>
-                    取消
-                  </Button>
-                ) : null,
-            },
-          ]}
-        />
-      </Drawer>
     </div>
   );
 }
