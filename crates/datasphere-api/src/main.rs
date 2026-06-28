@@ -40,8 +40,9 @@ async fn rocket() -> _ {
         config.scheduler.timezone
     );
 
-    // 连接数据库
-    let mut opt = ConnectOptions::new(&config.database.url);
+    // 连接数据库（连接串来自 .env 的 DATABASE_URL）
+    let db_url = config.database_url().expect("DATABASE_URL not configured");
+    let mut opt = ConnectOptions::new(&db_url);
     opt.max_connections(config.database.max_connections)
         .min_connections(config.database.min_connections);
     let db = Database::connect(opt)

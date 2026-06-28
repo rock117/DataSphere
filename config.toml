@@ -6,8 +6,7 @@ host = "127.0.0.1"
 port = 8000
 
 [database]
-# url 可被 .env 中的 DATABASE_URL 覆盖
-url = "mysql://root:root@localhost:3306/datasphere"
+# 连接串不在本文件配置，由 .env 的 DATABASE_URL 提供
 max_connections = 10
 min_connections = 2
 

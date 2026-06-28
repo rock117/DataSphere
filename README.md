@@ -60,10 +60,10 @@ mysql -u root -p < migrations/001_init.sql
 
 ### 2. 配置
 
-配置分两层，**.env 覆盖 config.toml**：
+配置分两层，职责清晰、无冗余：
 
-- `config.toml`：业务配置（端口、连接池、数据源、时区）
-- `.env`：环境相关与敏感信息（日志级别、数据库密码）—— 由 `dotenvy` 自动加载
+- `config.toml`：业务配置（端口、连接池大小、数据源、时区）—— 无敏感信息，可提交 git
+- `.env`：敏感信息（`DATABASE_URL` 含密码、`RUST_LOG`）—— 由 `dotenvy` 自动加载，gitignore 不提交
 
 ```bash
 cp .env.example .env
@@ -71,7 +71,7 @@ cp .env.example .env
 # config.toml 一般无需改动
 ```
 
-> `DATABASE_URL` 环境变量会覆盖 `config.toml` 中的 `database.url`，推荐把含密码的连接串放 `.env`，`config.toml` 保持占位即可。
+> 数据库连接串只在 `.env` 的 `DATABASE_URL` 中配置一处，`config.toml` 不再包含任何连接串，避免敏感信息进版本库。
 
 ### 3. 启动后端
 
