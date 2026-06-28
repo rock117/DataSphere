@@ -1,0 +1,10 @@
+[package]
+name = "datasphere-entity"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+sea-orm = { workspace = true }
+serde = { workspace = true }
+chrono = { workspace = true }

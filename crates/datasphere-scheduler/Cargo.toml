@@ -1,0 +1,22 @@
+[package]
+name = "datasphere-scheduler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+datasphere-core = { workspace = true }
+datasphere-entity = { workspace = true }
+datasphere-service = { workspace = true }
+tokio = { workspace = true }
+tokio-cron-scheduler = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dashmap = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true }
+sea-orm = { workspace = true }

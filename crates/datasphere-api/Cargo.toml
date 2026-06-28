@@ -1,0 +1,30 @@
+[package]
+name = "datasphere-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "datasphere-api"
+path = "src/main.rs"
+
+[dependencies]
+datasphere-core = { workspace = true }
+datasphere-entity = { workspace = true }
+datasphere-service = { workspace = true }
+datasphere-scheduler = { workspace = true }
+rocket = { workspace = true }
+sea-orm = { workspace = true }
+tokio = { workspace = true }
+tokio-cron-scheduler = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+dashmap = { workspace = true }
+toml = "0.8"
+dotenvy = "0.15"

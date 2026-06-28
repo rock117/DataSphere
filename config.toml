@@ -1,0 +1,21 @@
+# DataSphere 配置文件
+# 业务配置在此。敏感信息（如数据库密码）建议放 .env 通过 DATABASE_URL 覆盖。
+
+[server]
+host = "127.0.0.1"
+port = 8000
+
+[database]
+# url 可被 .env 中的 DATABASE_URL 覆盖
+url = "mysql://root:root@localhost:3306/datasphere"
+max_connections = 10
+min_connections = 2
+
+# 默认数据源 provider 名（需在 DataSourceRegistry 中注册）
+# 内置：mock
+[datasource]
+default_provider = "mock"
+
+# 时区用于 cron 调度（如 Asia/Shanghai）
+[scheduler]
+timezone = "Asia/Shanghai"
