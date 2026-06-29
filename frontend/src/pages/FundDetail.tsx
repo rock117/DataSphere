@@ -10,6 +10,7 @@ const fundTypeColor: Record<string, string> = {
   '债券型': 'blue',
   '货币型': 'green',
   '指数型': 'purple',
+  'ETF': 'geekblue',
   'QDII': 'cyan',
   'FOF': 'magenta',
   '其他': 'default',

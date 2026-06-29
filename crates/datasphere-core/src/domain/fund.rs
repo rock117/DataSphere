@@ -13,8 +13,10 @@ pub enum FundType {
     Bond,
     /// 货币型
     Monetary,
-    /// 指数型
+    /// 指数型（场外指数基金，被动跟踪指数，只有净值）
     Index,
+    /// ETF（场内交易基金，有实时行情，每日披露 PCF 成分股）
+    Etf,
     /// QDII
     Qdii,
     /// FOF
@@ -31,6 +33,7 @@ impl FundType {
             FundType::Bond => "债券型",
             FundType::Monetary => "货币型",
             FundType::Index => "指数型",
+            FundType::Etf => "ETF",
             FundType::Qdii => "QDII",
             FundType::Fof => "FOF",
             FundType::Other => "其他",
@@ -44,6 +47,7 @@ impl FundType {
             "债券型" => FundType::Bond,
             "货币型" => FundType::Monetary,
             "指数型" => FundType::Index,
+            "ETF" => FundType::Etf,
             "QDII" => FundType::Qdii,
             "FOF" => FundType::Fof,
             _ => FundType::Other,
