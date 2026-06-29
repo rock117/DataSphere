@@ -12,12 +12,14 @@ import {
   StockOutlined,
   LineChartOutlined,
   FundOutlined,
+  AppstoreOutlined,
 } from "@ant-design/icons";
 import Tasks from "./pages/Tasks";
 import TaskRuns from "./pages/TaskRuns";
 import Stocks from "./pages/Stocks";
 import Funds from "./pages/Funds";
 import FundDetail from "./pages/FundDetail";
+import Concepts from "./pages/Concepts";
 import Klines from "./pages/Klines";
 
 const { Header, Sider, Content } = Layout;
@@ -25,6 +27,7 @@ const { Header, Sider, Content } = Layout;
 const menuItems = [
   { key: "/tasks", icon: <ScheduleOutlined />, label: "任务管理" },
   { key: "/stocks", icon: <StockOutlined />, label: "股票列表" },
+  { key: "/concepts", icon: <AppstoreOutlined />, label: "概念板块" },
   { key: "/funds", icon: <FundOutlined />, label: "基金列表" },
   { key: "/klines", icon: <LineChartOutlined />, label: "行情查看" },
 ];
@@ -55,8 +58,8 @@ function AppLayout() {
             location.pathname.startsWith("/tasks")
               ? "/tasks"
               : location.pathname.startsWith("/funds")
-              ? "/funds"
-              : location.pathname,
+                ? "/funds"
+                : location.pathname,
           ]}
           onClick={({ key }) => navigate(key)}
         />
@@ -72,6 +75,7 @@ function AppLayout() {
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/tasks/:id/runs" element={<TaskRuns />} />
               <Route path="/stocks" element={<Stocks />} />
+              <Route path="/concepts" element={<Concepts />} />
               <Route path="/funds" element={<Funds />} />
               <Route path="/funds/:code" element={<FundDetail />} />
               <Route path="/klines" element={<Klines />} />

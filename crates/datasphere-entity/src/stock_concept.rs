@@ -1,20 +1,13 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, serde::Serialize)]
-#[sea_orm(table_name = "stocks")]
+#[sea_orm(table_name = "stock_concepts")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
-    pub code: String,
-    pub symbol: String,
-    pub name: String,
-    pub market: String,
-    pub exchange: String,
-    pub industry: Option<String>,
-    pub list_date: Option<chrono::NaiveDate>,
-    pub delist_date: Option<chrono::NaiveDate>,
+    pub stock_code: String,
+    pub concept_id: i64,
     pub created_at: chrono::NaiveDateTime,
-    pub updated_at: chrono::NaiveDateTime,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

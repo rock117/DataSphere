@@ -147,8 +147,12 @@ curl http://127.0.0.1:8000/api/tasks/1/runs
 |------|------|------|
 | GET | `/api/health` | 健康检查 |
 | GET | `/api/datasources` | 列出已注册数据源 |
-| GET | `/api/stocks?page&per_page&q` | 分页查询股票 |
+| GET | `/api/stocks?page&per_page&q&industry` | 分页查询股票（可按行业筛选） |
 | GET | `/api/stocks/:code` | 查单只股票 |
+| GET | `/api/industries` | 所有行业列表 |
+| GET | `/api/concepts` | 所有概念板块 |
+| GET | `/api/concepts/:id/stocks` | 概念的成分股 |
+| GET | `/api/stocks/:code/concepts` | 股票所属概念 |
 | GET | `/api/funds?page&per_page&q` | 分页查询基金 |
 | GET | `/api/funds/:code` | 查单只基金 |
 | GET | `/api/funds/:code/holdings?limit` | 基金成分股（最新报告期） |

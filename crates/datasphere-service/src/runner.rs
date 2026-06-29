@@ -1,6 +1,6 @@
 use datasphere_core::domain::{
-    FetchFundHoldingParams, FetchFundListParams, FetchKlineParams, FetchStockListParams, RunStats,
-    RunStatus, TaskType, TriggerType,
+    FetchConceptParams, FetchFundHoldingParams, FetchFundListParams, FetchIndustryParams,
+    FetchKlineParams, FetchStockListParams, RunStats, RunStatus, TaskType, TriggerType,
 };
 use datasphere_core::DataSourceRegistry;
 use datasphere_entity::task;
@@ -8,6 +8,7 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::concept_service::ConceptService;
 use crate::fund_holding_service::FundHoldingService;
 use crate::fund_service::FundService;
 use crate::kline_service::KlineService;
@@ -174,6 +175,73 @@ impl TaskRunner {
                     .ok();
                 tracing::info!(
                     "Stock list done: success={} failed={}",
+                    stats.success,
+                    stats.failed
+                );
+            }
+            TaskType::FetchIndustry => {
+                let params: FetchIndustryParams = task_model
+                    .params
+                    .as_ref()
+                    .map(|v| serde_json::from_value(v.clone()))
+                    .transpose()?
+                    .unwrap_or_default();
+
+                TaskService::update_progress(&self.db, run_id, 1, 0)
+                    .await
+                    .ok();
+
+                tracing::info!("Fetching industries via provider={}", task_model.provider);
+                if Self::is_cancelled(&self.db, run_id).await {
+                    return Ok(stats);
+                }
+                match source.fetch_industries(&params).await {
+                    Ok(items) => match StockService::update_industries(&self.db, &items).await {
+                        Ok(n) => stats.record_success(n),
+                        Err(e) => stats.record_failure(format!("update industries: {e:#}")),
+                    },
+                    Err(e) => stats.record_failure(format!("fetch industries: {e:#}")),
+                }
+                TaskService::update_progress(&self.db, run_id, 1, 1)
+                    .await
+                    .ok();
+                tracing::info!(
+                    "Industry done: success={} failed={}",
+                    stats.success,
+                    stats.failed
+                );
+            }
+            TaskType::FetchConcept => {
+                let params: FetchConceptParams = task_model
+                    .params
+                    .as_ref()
+                    .map(|v| serde_json::from_value(v.clone()))
+                    .transpose()?
+                    .unwrap_or_default();
+
+                TaskService::update_progress(&self.db, run_id, 1, 0)
+                    .await
+                    .ok();
+
+                tracing::info!("Fetching concepts via provider={}", task_model.provider);
+                if Self::is_cancelled(&self.db, run_id).await {
+                    return Ok(stats);
+                }
+                match source.fetch_concepts(&params).await {
+                    Ok((concepts, stock_concepts)) => {
+                        match ConceptService::upsert_all(&self.db, &concepts, &stock_concepts).await
+                        {
+                            Ok(n) => stats.record_success(n),
+                            Err(e) => stats.record_failure(format!("upsert concepts: {e:#}")),
+                        }
+                    }
+                    Err(e) => stats.record_failure(format!("fetch concepts: {e:#}")),
+                }
+                TaskService::update_progress(&self.db, run_id, 1, 1)
+                    .await
+                    .ok();
+                tracing::info!(
+                    "Concept done: success={} failed={}",
                     stats.success,
                     stats.failed
                 );

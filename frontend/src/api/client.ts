@@ -37,6 +37,7 @@ export interface Stock {
   name: string;
   market: string;
   exchange: string;
+  industry: string | null;
   list_date: string | null;
   delist_date: string | null;
   created_at: string;
@@ -119,6 +120,14 @@ export interface FundHolding {
   updated_at: string;
 }
 
+export interface Concept {
+  id: number;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Paginated<T> {
   items: T[];
   total: number;
@@ -133,16 +142,31 @@ export const api = {
   health: () => request<string>({ url: "/health" }),
 
   // stocks
-  listStocks: (params: { page?: number; per_page?: number; q?: string }) =>
-    request<Paginated<Stock>>({ url: "/stocks", params }),
+  listStocks: (params: {
+    page?: number;
+    per_page?: number;
+    q?: string;
+    industry?: string;
+  }) => request<Paginated<Stock>>({ url: "/stocks", params }),
   getStock: (code: string) => request<Stock | null>({ url: `/stocks/${code}` }),
+  listIndustries: () => request<string[]>({ url: "/industries" }),
+
+  // concepts
+  listConcepts: () => request<Concept[]>({ url: "/concepts" }),
+  listConceptStocks: (id: number) =>
+    request<Stock[]>({ url: `/concepts/${id}/stocks` }),
+  listStockConcepts: (code: string) =>
+    request<Concept[]>({ url: `/stocks/${code}/concepts` }),
 
   // funds
   listFunds: (params: { page?: number; per_page?: number; q?: string }) =>
     request<Paginated<Fund>>({ url: "/funds", params }),
   getFund: (code: string) => request<Fund | null>({ url: `/funds/${code}` }),
   listFundHoldings: (code: string, limit?: number) =>
-    request<FundHolding[]>({ url: `/funds/${code}/holdings`, params: { limit } }),
+    request<FundHolding[]>({
+      url: `/funds/${code}/holdings`,
+      params: { limit },
+    }),
   listFundHoldingsByDate: (code: string, reportDate: string) =>
     request<FundHolding[]>({ url: `/funds/${code}/holdings/${reportDate}` }),
   listReportDates: (code: string) =>

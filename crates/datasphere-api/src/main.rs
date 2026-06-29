@@ -7,13 +7,14 @@ use datasphere_core::{DataSourceRegistry, MockDataSource};
 use sea_orm::{ConnectOptions, Database};
 use std::sync::Arc;
 
+use routes::concept::{list_concept_stocks, list_concepts, list_stock_concepts};
 use routes::fund::{
     get_fund, list_fund_holdings, list_fund_holdings_by_date, list_funds, list_report_dates,
 };
 use routes::health;
 use routes::health::list_datasources;
 use routes::kline::get_klines;
-use routes::stock::{get_stock, list_stocks};
+use routes::stock::{get_stock, list_industries, list_stocks};
 use routes::task::*;
 use state::AppState;
 
@@ -82,6 +83,10 @@ async fn rocket() -> _ {
                 list_datasources,
                 list_stocks,
                 get_stock,
+                list_industries,
+                list_concepts,
+                list_concept_stocks,
+                list_stock_concepts,
                 list_funds,
                 get_fund,
                 list_fund_holdings,

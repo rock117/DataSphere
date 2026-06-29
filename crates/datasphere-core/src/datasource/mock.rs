@@ -1,7 +1,8 @@
 use crate::datasource::DataSource;
 use crate::domain::{
-    FetchFundHoldingParams, FetchFundListParams, FetchKlineParams, FetchKlineRequest,
-    FetchStockListParams, FundHolding, FundQuote, FundType, KlineQuote, Market, StockQuote,
+    Concept, FetchConceptParams, FetchFundHoldingParams, FetchFundListParams, FetchIndustryParams,
+    FetchKlineParams, FetchKlineRequest, FetchStockListParams, FundHolding, FundQuote, FundType,
+    KlineQuote, Market, StockConcept, StockIndustry, StockQuote,
 };
 use crate::error::Result;
 use async_trait::async_trait;
@@ -270,6 +271,82 @@ impl MockDataSource {
         out
     }
 
+    /// 生成股票行业分类 mock 数据
+    fn mock_industries(codes: &[String]) -> Vec<StockIndustry> {
+        // 按代码前缀映射申万一级行业（简化版）
+        let industry_map: &[(u8, &str)] = &[(b'6', "银行")];
+        // 更细的映射表
+        let code_industry: &[(&str, &str)] = &[
+            ("600000", "银行"),
+            ("600009", "交通运输"),
+            ("600519", "食品饮料"),
+            ("600036", "银行"),
+            ("000001", "银行"),
+            ("000002", "房地产"),
+            ("000858", "食品饮料"),
+            ("002594", "汽车"),
+            ("300750", "电力设备"),
+            ("430047", "医药生物"),
+        ];
+
+        codes
+            .iter()
+            .map(|code| {
+                let industry = code_industry
+                    .iter()
+                    .find(|(c, _)| *c == code)
+                    .map(|(_, ind)| ind.to_string())
+                    .unwrap_or_else(|| {
+                        // 未知代码按首字符兜底
+                        match code.chars().next() {
+                            Some('6') => "银行".to_string(),
+                            Some('0') | Some('3') => "综合".to_string(),
+                            _ => "其他".to_string(),
+                        }
+                    });
+                let _ = industry_map; // 抑制未使用警告
+                StockIndustry {
+                    code: code.clone(),
+                    industry,
+                }
+            })
+            .collect()
+    }
+
+    /// 生成概念板块及成分股 mock 数据
+    /// 返回 (概念列表, 股票-概念关联列表)
+    fn mock_concepts() -> (Vec<Concept>, Vec<StockConcept>) {
+        // 概念 -> 成分股代码
+        let concept_stocks: &[(&str, &[&str])] = &[
+            ("人工智能", &["300750", "002594"]),
+            ("新能源", &["300750", "002594"]),
+            ("白酒", &["600519", "000858"]),
+            ("银行", &["600000", "600036", "000001"]),
+            ("茅指数", &["600519"]),
+            ("宁组合", &["300750", "002594"]),
+            ("国产替代", &["300750"]),
+            ("房地产", &["000002"]),
+        ];
+
+        let mut concepts = Vec::new();
+        let mut stock_concepts = Vec::new();
+
+        for (name, stocks) in concept_stocks {
+            concepts.push(Concept {
+                name: name.to_string(),
+                description: Some(format!("{}概念板块", name)),
+            });
+            for stock_code in *stocks {
+                stock_concepts.push(StockConcept {
+                    stock_code: stock_code.to_string(),
+                    concept_name: name.to_string(),
+                });
+            }
+        }
+
+        (concepts, stock_concepts)
+    }
+
     /// 生成单只股票在日期范围内的随机 OHLCV 行情
     fn mock_kline(code: &str, start: NaiveDate, end: NaiveDate) -> Vec<KlineQuote> {
         let mut rng = rand::thread_rng();
@@ -329,6 +406,31 @@ impl DataSource for MockDataSource {
             list.retain(|q| q.market == market);
         }
         Ok(list)
+    }
+
+    async fn fetch_industries(&self, params: &FetchIndustryParams) -> Result<Vec<StockIndustry>> {
+        // codes 为空时用全部 mock 股票
+        let all = Self::mock_stock_list();
+        let codes: Vec<String> = if params.codes.is_empty() {
+            all.into_iter().map(|q| q.code).collect()
+        } else {
+            params.codes.clone()
+        };
+        Ok(Self::mock_industries(&codes))
+    }
+
+    async fn fetch_concepts(
+        &self,
+        params: &FetchConceptParams,
+    ) -> Result<(Vec<Concept>, Vec<StockConcept>)> {
+        let (mut concepts, mut stock_concepts) = Self::mock_concepts();
+        // 按指定概念名过滤
+        if !params.concepts.is_empty() {
+            let wanted: Vec<String> = params.concepts.clone();
+            concepts.retain(|c| wanted.contains(&c.name));
+            stock_concepts.retain(|sc| wanted.contains(&sc.concept_name));
+        }
+        Ok((concepts, stock_concepts))
     }
 
     async fn fetch_fund_list(&self, params: &FetchFundListParams) -> Result<Vec<FundQuote>> {

@@ -318,6 +318,8 @@ export default function Tasks() {
             <Select
               options={[
                 { value: "FetchStockList", label: "拉取股票列表" },
+                { value: "FetchIndustry", label: "拉取行业分类" },
+                { value: "FetchConcept", label: "拉取概念板块" },
                 { value: "FetchFundList", label: "拉取基金列表" },
                 { value: "FetchFundHolding", label: "拉取基金成分股" },
                 { value: "FetchKline", label: "拉取日K行情" },

@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "PascalCase")]
 pub enum TaskType {
     FetchStockList,
+    FetchIndustry,
+    FetchConcept,
     FetchFundList,
     FetchFundHolding,
     FetchKline,
@@ -14,6 +16,8 @@ impl TaskType {
     pub fn as_str(&self) -> &'static str {
         match self {
             TaskType::FetchStockList => "FetchStockList",
+            TaskType::FetchIndustry => "FetchIndustry",
+            TaskType::FetchConcept => "FetchConcept",
             TaskType::FetchFundList => "FetchFundList",
             TaskType::FetchFundHolding => "FetchFundHolding",
             TaskType::FetchKline => "FetchKline",
@@ -26,6 +30,8 @@ impl std::str::FromStr for TaskType {
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             "FetchStockList" => Ok(TaskType::FetchStockList),
+            "FetchIndustry" => Ok(TaskType::FetchIndustry),
+            "FetchConcept" => Ok(TaskType::FetchConcept),
             "FetchFundList" => Ok(TaskType::FetchFundList),
             "FetchFundHolding" => Ok(TaskType::FetchFundHolding),
             "FetchKline" => Ok(TaskType::FetchKline),
@@ -132,6 +138,24 @@ pub struct FetchStockListParams {
     /// 可选：仅拉取指定市场，None 表示全市场
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub market: Option<super::Market>,
+}
+
+/// FetchIndustry 任务的参数结构
+/// 拉取股票行业分类，更新 stocks.industry 字段
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FetchIndustryParams {
+    /// 指定股票代码列表，空表示全市场（取 stocks 表）
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub codes: Vec<String>,
+}
+
+/// FetchConcept 任务的参数结构
+/// 拉取概念板块及其成分股，写入 concepts + stock_concepts 表
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FetchConceptParams {
+    /// 指定概念名称列表，空表示拉取全部概念
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub concepts: Vec<String>,
 }
 
 /// FetchFundList 任务的参数结构

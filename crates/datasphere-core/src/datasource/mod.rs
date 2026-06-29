@@ -11,8 +11,8 @@ pub use mock::MockDataSource;
 pub use registry::DataSourceRegistry;
 
 use crate::domain::{
-    FetchFundHoldingParams, FetchFundListParams, FetchKlineRequest, FundHolding, FundQuote,
-    KlineQuote, StockQuote,
+    Concept, FetchConceptParams, FetchFundHoldingParams, FetchFundListParams, FetchIndustryParams,
+    FetchKlineRequest, FundHolding, FundQuote, KlineQuote, StockConcept, StockIndustry, StockQuote,
 };
 use crate::error::Result;
 use async_trait::async_trait;
@@ -34,6 +34,25 @@ pub trait DataSource: Send + Sync + 'static {
         &self,
         params: &crate::domain::FetchStockListParams,
     ) -> Result<Vec<StockQuote>>;
+
+    /// 拉取股票行业分类（更新 stocks.industry）
+    async fn fetch_industries(&self, _params: &FetchIndustryParams) -> Result<Vec<StockIndustry>> {
+        Err(crate::error::CoreError::DataSource(format!(
+            "data source '{}' does not support fetch_industries",
+            self.name()
+        )))
+    }
+
+    /// 拉取概念板块及成分股
+    async fn fetch_concepts(
+        &self,
+        _params: &FetchConceptParams,
+    ) -> Result<(Vec<Concept>, Vec<StockConcept>)> {
+        Err(crate::error::CoreError::DataSource(format!(
+            "data source '{}' does not support fetch_concepts",
+            self.name()
+        )))
+    }
 
     /// 拉取基金列表
     async fn fetch_fund_list(&self, _params: &FetchFundListParams) -> Result<Vec<FundQuote>> {
