@@ -10,7 +10,10 @@ pub mod registry;
 pub use mock::MockDataSource;
 pub use registry::DataSourceRegistry;
 
-use crate::domain::{FetchFundListParams, FetchKlineRequest, FundQuote, KlineQuote, StockQuote};
+use crate::domain::{
+    FetchFundHoldingParams, FetchFundListParams, FetchKlineRequest, FundHolding, FundQuote,
+    KlineQuote, StockQuote,
+};
 use crate::error::Result;
 use async_trait::async_trait;
 
@@ -36,6 +39,17 @@ pub trait DataSource: Send + Sync + 'static {
     async fn fetch_fund_list(&self, _params: &FetchFundListParams) -> Result<Vec<FundQuote>> {
         Err(crate::error::CoreError::DataSource(format!(
             "data source '{}' does not support fetch_fund_list",
+            self.name()
+        )))
+    }
+
+    /// 拉取基金成分股（持仓明细）
+    async fn fetch_fund_holdings(
+        &self,
+        _params: &FetchFundHoldingParams,
+    ) -> Result<Vec<FundHolding>> {
+        Err(crate::error::CoreError::DataSource(format!(
+            "data source '{}' does not support fetch_fund_holdings",
             self.name()
         )))
     }

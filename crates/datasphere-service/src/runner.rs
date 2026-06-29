@@ -1,6 +1,6 @@
 use datasphere_core::domain::{
-    FetchFundListParams, FetchKlineParams, FetchStockListParams, RunStats, RunStatus, TaskType,
-    TriggerType,
+    FetchFundHoldingParams, FetchFundListParams, FetchKlineParams, FetchStockListParams, RunStats,
+    RunStatus, TaskType, TriggerType,
 };
 use datasphere_core::DataSourceRegistry;
 use datasphere_entity::task;
@@ -8,6 +8,7 @@ use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::fund_holding_service::FundHoldingService;
 use crate::fund_service::FundService;
 use crate::kline_service::KlineService;
 use crate::stock_service::StockService;
@@ -205,6 +206,83 @@ impl TaskRunner {
                     .ok();
                 tracing::info!(
                     "Fund list done: success={} failed={}",
+                    stats.success,
+                    stats.failed
+                );
+            }
+            TaskType::FetchFundHolding => {
+                let params: FetchFundHoldingParams = task_model
+                    .params
+                    .as_ref()
+                    .map(|v| serde_json::from_value(v.clone()))
+                    .transpose()?
+                    .unwrap_or_default();
+
+                // codes 为空时取全市场基金列表
+                let default_codes = match FundService::list_all_codes(&self.db).await {
+                    Ok(c) => c,
+                    Err(e) => {
+                        stats.record_failure(format!("load fund codes: {e:#}"));
+                        return Ok(stats);
+                    }
+                };
+                let codes: Vec<String> = if params.codes.is_empty() {
+                    default_codes
+                } else {
+                    params.codes.clone()
+                };
+                let total = codes.len();
+                TaskService::update_progress(&self.db, run_id, total, 0)
+                    .await
+                    .ok();
+
+                let report_date = params
+                    .report_date
+                    .unwrap_or_else(|| chrono::Local::now().date_naive());
+
+                for (i, fund_code) in codes.iter().enumerate() {
+                    if Self::is_cancelled(&self.db, run_id).await {
+                        tracing::info!(
+                            "task {} run {} cancelled at {}/{}",
+                            task_model.id,
+                            run_id,
+                            i,
+                            total
+                        );
+                        break;
+                    }
+                    tracing::info!(
+                        "Fetching fund holdings [{}/{}] fund_code={} report_date={}",
+                        i + 1,
+                        total,
+                        fund_code,
+                        report_date
+                    );
+                    let req = FetchFundHoldingParams {
+                        codes: vec![fund_code.clone()],
+                        report_date: Some(report_date),
+                    };
+                    match source.fetch_fund_holdings(&req).await {
+                        Ok(holdings) => {
+                            match FundHoldingService::upsert_many(&self.db, &holdings).await {
+                                Ok(n) => stats.record_success(n),
+                                Err(e) => stats.record_failure(format!(
+                                    "upsert fund holdings code={}: {e:#}",
+                                    fund_code
+                                )),
+                            }
+                        }
+                        Err(e) => stats.record_failure(format!(
+                            "fetch fund holdings code={}: {e:#}",
+                            fund_code
+                        )),
+                    }
+                    TaskService::update_progress(&self.db, run_id, total, i + 1)
+                        .await
+                        .ok();
+                }
+                tracing::info!(
+                    "Fund holdings done: success={} failed={}",
                     stats.success,
                     stats.failed
                 );

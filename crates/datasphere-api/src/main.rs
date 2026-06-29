@@ -7,7 +7,9 @@ use datasphere_core::{DataSourceRegistry, MockDataSource};
 use sea_orm::{ConnectOptions, Database};
 use std::sync::Arc;
 
-use routes::fund::{get_fund, list_funds};
+use routes::fund::{
+    get_fund, list_fund_holdings, list_fund_holdings_by_date, list_funds, list_report_dates,
+};
 use routes::health;
 use routes::health::list_datasources;
 use routes::kline::get_klines;
@@ -82,6 +84,9 @@ async fn rocket() -> _ {
                 get_stock,
                 list_funds,
                 get_fund,
+                list_fund_holdings,
+                list_fund_holdings_by_date,
+                list_report_dates,
                 get_klines,
                 list_tasks,
                 get_task,

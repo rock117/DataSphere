@@ -319,6 +319,7 @@ export default function Tasks() {
               options={[
                 { value: "FetchStockList", label: "拉取股票列表" },
                 { value: "FetchFundList", label: "拉取基金列表" },
+                { value: "FetchFundHolding", label: "拉取基金成分股" },
                 { value: "FetchKline", label: "拉取日K行情" },
               ]}
             />

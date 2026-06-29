@@ -1,3 +1,4 @@
+pub mod fund_holding_service;
 pub mod fund_service;
 pub mod kline_service;
 pub mod runner;

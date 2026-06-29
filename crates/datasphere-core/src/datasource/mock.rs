@@ -1,7 +1,7 @@
 use crate::datasource::DataSource;
 use crate::domain::{
-    FetchFundListParams, FetchKlineParams, FetchKlineRequest, FetchStockListParams, FundQuote,
-    FundType, KlineQuote, Market, StockQuote,
+    FetchFundHoldingParams, FetchFundListParams, FetchKlineParams, FetchKlineRequest,
+    FetchStockListParams, FundHolding, FundQuote, FundType, KlineQuote, Market, StockQuote,
 };
 use crate::error::Result;
 use async_trait::async_trait;
@@ -189,6 +189,63 @@ impl MockDataSource {
             .collect()
     }
 
+    /// 生成基金成分股 mock 数据：每只基金生成前十大持仓
+    fn mock_fund_holdings(fund_codes: &[String], report_date: NaiveDate) -> Vec<FundHolding> {
+        // 模拟持仓股票池（与 mock_stock_list 一致）
+        let stock_pool: &[(Market, &str, &str)] = &[
+            (Market::SH, "600000", "浦发银行"),
+            (Market::SH, "600009", "上海机场"),
+            (Market::SH, "600519", "贵州茅台"),
+            (Market::SH, "600036", "招商银行"),
+            (Market::SZ, "000001", "平安银行"),
+            (Market::SZ, "000002", "万科A"),
+            (Market::SZ, "000858", "五粮液"),
+            (Market::SZ, "002594", "比亚迪"),
+            (Market::SZ, "300750", "宁德时代"),
+            (Market::BJ, "430047", "诺思兰德"),
+        ];
+
+        let mut rng = rand::thread_rng();
+        let mut out = Vec::new();
+
+        for fund_code in fund_codes {
+            // 每只基金随机选 8-10 只股票作为持仓
+            let n = rng.gen_range(8..=10);
+            let mut weights: Vec<f64> = (0..n).map(|_| rng.gen_range(1.0..15.0)).collect();
+            let total: f64 = weights.iter().sum();
+            // 归一化到合计 ~80%（前十大占净值约 80%）
+            weights = weights.iter().map(|w| round2(w / total * 80.0)).collect();
+
+            // 随机选 n 只不重复的股票
+            let mut indices: Vec<usize> = (0..stock_pool.len()).collect();
+            // 简单 shuffle
+            for i in (1..indices.len()).rev() {
+                let j = rng.gen_range(0..=i);
+                indices.swap(i, j);
+            }
+
+            for (i, &idx) in indices.iter().take(n).enumerate() {
+                let (_, code, name) = stock_pool[idx];
+                let weight = weights[i];
+                let shares = rng.gen_range(100_000..10_000_000) as i64;
+                let price = rng.gen_range(5.0..2000.0);
+                let market_value = round2(shares as f64 * price);
+
+                out.push(FundHolding {
+                    fund_code: fund_code.clone(),
+                    stock_code: code.to_string(),
+                    stock_name: name.to_string(),
+                    report_date,
+                    weight,
+                    shares: Some(shares),
+                    market_value: Some(market_value),
+                    rank: Some((i + 1) as i32),
+                });
+            }
+        }
+        out
+    }
+
     /// 生成单只股票在日期范围内的随机 OHLCV 行情
     fn mock_kline(code: &str, start: NaiveDate, end: NaiveDate) -> Vec<KlineQuote> {
         let mut rng = rand::thread_rng();
@@ -256,6 +313,23 @@ impl DataSource for MockDataSource {
             list.retain(|q| q.fund_type == ft);
         }
         Ok(list)
+    }
+
+    async fn fetch_fund_holdings(
+        &self,
+        params: &FetchFundHoldingParams,
+    ) -> Result<Vec<FundHolding>> {
+        // 没指定 codes 时用全部 mock 基金
+        let all_funds = Self::mock_fund_list();
+        let codes: Vec<String> = if params.codes.is_empty() {
+            all_funds.into_iter().map(|f| f.code).collect()
+        } else {
+            params.codes.clone()
+        };
+        let report_date = params
+            .report_date
+            .unwrap_or_else(|| chrono::Local::now().date_naive());
+        Ok(Self::mock_fund_holdings(&codes, report_date))
     }
 
     async fn fetch_kline(&self, req: &FetchKlineRequest) -> Result<Vec<KlineQuote>> {

@@ -17,6 +17,7 @@ import Tasks from "./pages/Tasks";
 import TaskRuns from "./pages/TaskRuns";
 import Stocks from "./pages/Stocks";
 import Funds from "./pages/Funds";
+import FundDetail from "./pages/FundDetail";
 import Klines from "./pages/Klines";
 
 const { Header, Sider, Content } = Layout;
@@ -53,6 +54,8 @@ function AppLayout() {
           selectedKeys={[
             location.pathname.startsWith("/tasks")
               ? "/tasks"
+              : location.pathname.startsWith("/funds")
+              ? "/funds"
               : location.pathname,
           ]}
           onClick={({ key }) => navigate(key)}
@@ -70,6 +73,7 @@ function AppLayout() {
               <Route path="/tasks/:id/runs" element={<TaskRuns />} />
               <Route path="/stocks" element={<Stocks />} />
               <Route path="/funds" element={<Funds />} />
+              <Route path="/funds/:code" element={<FundDetail />} />
               <Route path="/klines" element={<Klines />} />
             </Routes>
           </div>

@@ -98,4 +98,13 @@ impl FundService {
             .await
             .map_err(Into::into)
     }
+
+    /// 获取全市场基金代码列表
+    pub async fn list_all_codes(db: &DatabaseConnection) -> anyhow::Result<Vec<String>> {
+        let rows = fund::Entity::find()
+            .order_by_asc(fund::Column::Code)
+            .all(db)
+            .await?;
+        Ok(rows.into_iter().map(|m| m.code).collect())
+    }
 }

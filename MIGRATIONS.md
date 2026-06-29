@@ -88,6 +88,7 @@ sqlx migrate revert
 | `20260628000002_add_run_stats.sql` | task_runs 加 success_count / failed_count / duration_ms |
 | `20260628000003_add_progress_cancel.sql` | task_runs 加 total / processed / cancel_requested |
 | `20260628000004_add_funds.sql` | 新增 funds 基金列表表 |
+| `20260629000001_add_fund_holdings.sql` | 新增 fund_holdings 基金成分股表 |
 
 ## 从零部署
 

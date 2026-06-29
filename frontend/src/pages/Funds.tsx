@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Table, Input, Button, Space, Tag, message } from 'antd'
-import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
+import { ReloadOutlined, SearchOutlined, EyeOutlined } from '@ant-design/icons'
 import { api, Fund, Paginated } from '../api/client'
 
 const fundTypeColor: Record<string, string> = {
@@ -20,6 +21,7 @@ export default function Funds() {
   const [page, setPage] = useState(1)
   const [perPage] = useState(20)
   const [q, setQ] = useState('')
+  const navigate = useNavigate()
 
   const load = async () => {
     setLoading(true)
@@ -51,6 +53,12 @@ export default function Funds() {
     {
       title: '最新规模(亿)', dataIndex: 'latest_scale', width: 120,
       render: (v: number | null) => v == null ? '-' : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    },
+    {
+      title: '操作', width: 110,
+      render: (_: unknown, r: Fund) => (
+        <Button size="small" icon={<EyeOutlined />} onClick={() => navigate(`/funds/${r.code}`)}>成分股</Button>
+      ),
     },
   ]
 

@@ -105,6 +105,20 @@ export interface Fund {
   updated_at: string;
 }
 
+export interface FundHolding {
+  id: number;
+  fund_code: string;
+  stock_code: string;
+  stock_name: string;
+  report_date: string;
+  weight: number;
+  shares: number | null;
+  market_value: number | null;
+  rank: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Paginated<T> {
   items: T[];
   total: number;
@@ -127,6 +141,12 @@ export const api = {
   listFunds: (params: { page?: number; per_page?: number; q?: string }) =>
     request<Paginated<Fund>>({ url: "/funds", params }),
   getFund: (code: string) => request<Fund | null>({ url: `/funds/${code}` }),
+  listFundHoldings: (code: string, limit?: number) =>
+    request<FundHolding[]>({ url: `/funds/${code}/holdings`, params: { limit } }),
+  listFundHoldingsByDate: (code: string, reportDate: string) =>
+    request<FundHolding[]>({ url: `/funds/${code}/holdings/${reportDate}` }),
+  listReportDates: (code: string) =>
+    request<string[]>({ url: `/funds/${code}/report_dates` }),
 
   // klines
   getKlines: (code: string, params: { start?: string; end?: string }) =>

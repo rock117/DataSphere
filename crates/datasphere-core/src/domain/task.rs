@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub enum TaskType {
     FetchStockList,
     FetchFundList,
+    FetchFundHolding,
     FetchKline,
 }
 
@@ -14,6 +15,7 @@ impl TaskType {
         match self {
             TaskType::FetchStockList => "FetchStockList",
             TaskType::FetchFundList => "FetchFundList",
+            TaskType::FetchFundHolding => "FetchFundHolding",
             TaskType::FetchKline => "FetchKline",
         }
     }
@@ -25,6 +27,7 @@ impl std::str::FromStr for TaskType {
         match s {
             "FetchStockList" => Ok(TaskType::FetchStockList),
             "FetchFundList" => Ok(TaskType::FetchFundList),
+            "FetchFundHolding" => Ok(TaskType::FetchFundHolding),
             "FetchKline" => Ok(TaskType::FetchKline),
             other => Err(crate::error::CoreError::InvalidTaskType(other.to_string())),
         }
@@ -137,6 +140,17 @@ pub struct FetchFundListParams {
     /// 可选：仅拉取指定基金类型，None 表示全类型
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fund_type: Option<super::FundType>,
+}
+
+/// FetchFundHolding 任务的参数结构
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FetchFundHoldingParams {
+    /// 指定基金代码列表，空表示全市场（取 funds 表）
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub codes: Vec<String>,
+    /// 报告期，None 表示最新一期
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub report_date: Option<chrono::NaiveDate>,
 }
 
 /// FetchKline 任务的参数结构

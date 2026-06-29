@@ -9,8 +9,9 @@ pub mod error;
 
 pub use datasource::{DataSource, DataSourceRegistry, MockDataSource};
 pub use domain::{
-    FetchFundListParams, FetchKlineParams, FetchKlineRequest, FetchStockListParams, FundQuote,
-    FundType, KlineQuote, Market, RunStats, StockQuote,
+    FetchFundHoldingParams, FetchFundListParams, FetchKlineParams, FetchKlineRequest,
+    FetchStockListParams, FundHolding, FundQuote, FundType, KlineQuote, Market, RunStats,
+    StockQuote,
 };
 pub use domain::{RunStatus, TaskType, TriggerType};
 pub use error::{CoreError, Result};
