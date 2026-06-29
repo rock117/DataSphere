@@ -54,8 +54,21 @@ pub trait DataSource: Send + Sync + 'static {
 
 ### 1. 初始化数据库
 
+使用 sqlx-cli 执行迁移（自动创建表 + 追踪已执行版本）：
+
 ```bash
-mysql -u root -p < migrations/001_init.sql
+# 安装 sqlx-cli（如未安装）
+cargo install sqlx-cli --no-default-features --features mysql,rustls
+
+# 执行迁移（DATABASE_URL 可放在 .env 中，sqlx 会自动读取）
+DATABASE_URL=mysql://root:123456@localhost:3306/datasphere sqlx migrate run
+```
+
+后续新增迁移文件后，再次执行 `sqlx migrate run` 会自动跑未执行的版本。
+
+新建空迁移文件：
+```bash
+sqlx migrate add -r <name>   # -r 生成可回滚的 up/down 文件
 ```
 
 ### 2. 配置
