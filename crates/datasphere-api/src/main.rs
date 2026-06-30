@@ -4,6 +4,10 @@ mod routes;
 mod state;
 
 use datasphere_core::{DataSourceRegistry, MockDataSource};
+use datasphere_service::collector::{
+    CollectorRegistry, ConceptCollector, FundHoldingCollector, FundListCollector,
+    IndustryCollector, KlineCollector, StockListCollector,
+};
 use sea_orm::{ConnectOptions, Database};
 use std::sync::Arc;
 
@@ -12,7 +16,7 @@ use routes::fund::{
     get_fund, list_fund_holdings, list_fund_holdings_by_date, list_funds, list_report_dates,
 };
 use routes::health;
-use routes::health::list_datasources;
+use routes::health::{list_data_types, list_datasources};
 use routes::kline::get_klines;
 use routes::stock::{get_stock, list_industries, list_stocks};
 use routes::task::*;
@@ -59,8 +63,19 @@ async fn rocket() -> _ {
     registry.register(Arc::new(MockDataSource::new()));
     tracing::info!("DataSources registered: {:?}", registry.list());
 
+    // 注册采集器
+    let mut collectors = CollectorRegistry::new();
+    collectors.register(Arc::new(StockListCollector));
+    collectors.register(Arc::new(IndustryCollector));
+    collectors.register(Arc::new(ConceptCollector));
+    collectors.register(Arc::new(FundListCollector));
+    collectors.register(Arc::new(FundHoldingCollector));
+    collectors.register(Arc::new(KlineCollector));
+    let collectors = Arc::new(collectors);
+    tracing::info!("Collectors registered: {:?}", collectors.list());
+
     // 创建 AppState
-    let state = AppState::new(db.clone(), registry)
+    let state = AppState::new(db.clone(), registry, collectors)
         .await
         .expect("failed to create AppState");
 
@@ -81,6 +96,7 @@ async fn rocket() -> _ {
             rocket::routes![
                 health::health,
                 list_datasources,
+                list_data_types,
                 list_stocks,
                 get_stock,
                 list_industries,

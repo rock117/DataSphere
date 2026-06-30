@@ -18,7 +18,7 @@ pub struct KlineQuote {
 
 /// 数据源拉取日K的请求参数。
 /// `code` 为单只股票代码，由 service 层根据 task params 拆分后逐个调用。
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct FetchKlineRequest {
     pub code: String,
     pub start: NaiveDate,

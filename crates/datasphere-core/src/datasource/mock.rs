@@ -1,10 +1,11 @@
 use crate::datasource::DataSource;
 use crate::domain::{
-    Concept, FetchConceptParams, FetchFundHoldingParams, FetchFundListParams, FetchIndustryParams,
-    FetchKlineParams, FetchKlineRequest, FetchStockListParams, FundHolding, FundQuote, FundType,
-    KlineQuote, Market, StockConcept, StockIndustry, StockQuote,
+    Concept, DataType, FetchConceptParams, FetchFundHoldingParams, FetchFundListParams,
+    FetchIndustryParams, FetchKlineParams, FetchKlineRequest, FetchParams, FetchResult,
+    FetchStockListParams, FundHolding, FundQuote, FundType, KlineQuote, Market, StockConcept,
+    StockIndustry, StockQuote,
 };
-use crate::error::Result;
+use crate::error::{CoreError, Result};
 use async_trait::async_trait;
 use chrono::{Datelike, NaiveDate};
 use rand::Rng;
@@ -400,67 +401,91 @@ impl DataSource for MockDataSource {
         "mock"
     }
 
-    async fn fetch_stock_list(&self, params: &FetchStockListParams) -> Result<Vec<StockQuote>> {
-        let mut list = Self::mock_stock_list();
-        if let Some(market) = params.market {
-            list.retain(|q| q.market == market);
+    fn capabilities(&self) -> &[DataType] {
+        // Mock 数据源支持所有数据类型
+        &[
+            DataType::StockList,
+            DataType::Industry,
+            DataType::Concept,
+            DataType::FundList,
+            DataType::FundHolding,
+            DataType::Kline,
+        ]
+    }
+
+    async fn fetch(&self, params: &FetchParams) -> Result<FetchResult> {
+        match params.data_type {
+            DataType::StockList => {
+                let p: FetchStockListParams =
+                    serde_json::from_value(params.params.clone()).unwrap_or_default();
+                let mut list = Self::mock_stock_list();
+                if let Some(market) = p.market {
+                    list.retain(|q| q.market == market);
+                }
+                Ok(FetchResult::Stocks(list))
+            }
+            DataType::Industry => {
+                let p: FetchIndustryParams =
+                    serde_json::from_value(params.params.clone()).unwrap_or_default();
+                let all = Self::mock_stock_list();
+                let codes = if p.codes.is_empty() {
+                    all.into_iter().map(|q| q.code).collect()
+                } else {
+                    p.codes
+                };
+                Ok(FetchResult::Industries(Self::mock_industries(&codes)))
+            }
+            DataType::Concept => {
+                let p: FetchConceptParams =
+                    serde_json::from_value(params.params.clone()).unwrap_or_default();
+                let (mut concepts, mut stock_concepts) = Self::mock_concepts();
+                if !p.concepts.is_empty() {
+                    concepts.retain(|c| p.concepts.contains(&c.name));
+                    stock_concepts.retain(|sc| p.concepts.contains(&sc.concept_name));
+                }
+                Ok(FetchResult::Concepts(concepts, stock_concepts))
+            }
+            DataType::FundList => {
+                let p: FetchFundListParams =
+                    serde_json::from_value(params.params.clone()).unwrap_or_default();
+                let mut list = Self::mock_fund_list();
+                if let Some(ft) = p.fund_type {
+                    list.retain(|q| q.fund_type == ft);
+                }
+                Ok(FetchResult::Funds(list))
+            }
+            DataType::FundHolding => {
+                let p: FetchFundHoldingParams =
+                    serde_json::from_value(params.params.clone()).unwrap_or_default();
+                let all_funds = Self::mock_fund_list();
+                let codes = if p.codes.is_empty() {
+                    all_funds.into_iter().map(|f| f.code).collect()
+                } else {
+                    p.codes
+                };
+                let report_date = p
+                    .report_date
+                    .unwrap_or_else(|| chrono::Local::now().date_naive());
+                Ok(FetchResult::FundHoldings(Self::mock_fund_holdings(
+                    &codes,
+                    report_date,
+                )))
+            }
+            DataType::Kline => {
+                let req: FetchKlineRequest =
+                    serde_json::from_value(params.params.clone()).unwrap_or_default();
+                Ok(FetchResult::Klines(Self::mock_kline(
+                    &req.code, req.start, req.end,
+                )))
+            }
         }
-        Ok(list)
     }
+}
 
-    async fn fetch_industries(&self, params: &FetchIndustryParams) -> Result<Vec<StockIndustry>> {
-        // codes 为空时用全部 mock 股票
-        let all = Self::mock_stock_list();
-        let codes: Vec<String> = if params.codes.is_empty() {
-            all.into_iter().map(|q| q.code).collect()
-        } else {
-            params.codes.clone()
-        };
-        Ok(Self::mock_industries(&codes))
-    }
-
-    async fn fetch_concepts(
-        &self,
-        params: &FetchConceptParams,
-    ) -> Result<(Vec<Concept>, Vec<StockConcept>)> {
-        let (mut concepts, mut stock_concepts) = Self::mock_concepts();
-        // 按指定概念名过滤
-        if !params.concepts.is_empty() {
-            let wanted: Vec<String> = params.concepts.clone();
-            concepts.retain(|c| wanted.contains(&c.name));
-            stock_concepts.retain(|sc| wanted.contains(&sc.concept_name));
-        }
-        Ok((concepts, stock_concepts))
-    }
-
-    async fn fetch_fund_list(&self, params: &FetchFundListParams) -> Result<Vec<FundQuote>> {
-        let mut list = Self::mock_fund_list();
-        if let Some(ft) = params.fund_type {
-            list.retain(|q| q.fund_type == ft);
-        }
-        Ok(list)
-    }
-
-    async fn fetch_fund_holdings(
-        &self,
-        params: &FetchFundHoldingParams,
-    ) -> Result<Vec<FundHolding>> {
-        // 没指定 codes 时用全部 mock 基金
-        let all_funds = Self::mock_fund_list();
-        let codes: Vec<String> = if params.codes.is_empty() {
-            all_funds.into_iter().map(|f| f.code).collect()
-        } else {
-            params.codes.clone()
-        };
-        let report_date = params
-            .report_date
-            .unwrap_or_else(|| chrono::Local::now().date_naive());
-        Ok(Self::mock_fund_holdings(&codes, report_date))
-    }
-
-    async fn fetch_kline(&self, req: &FetchKlineRequest) -> Result<Vec<KlineQuote>> {
-        Ok(Self::mock_kline(&req.code, req.start, req.end))
-    }
+// 检查不支持的数据类型时返回错误（供其他数据源参考）
+#[allow(dead_code)]
+fn unsupported(name: &str, dt: DataType) -> CoreError {
+    CoreError::DataSource(format!("data source '{name}' does not support {dt}"))
 }
 
 fn round2(v: f64) -> f64 {

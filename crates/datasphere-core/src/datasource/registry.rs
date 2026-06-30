@@ -1,4 +1,5 @@
 use crate::datasource::DataSource;
+use crate::domain::DataType;
 use crate::error::{CoreError, Result};
 use dashmap::DashMap;
 use std::sync::Arc;
@@ -31,5 +32,14 @@ impl DataSourceRegistry {
     /// 列出所有已注册的 provider 名
     pub fn list(&self) -> Vec<String> {
         self.sources.iter().map(|e| e.key().clone()).collect()
+    }
+
+    /// 列出支持指定数据类型的数据源 provider 名
+    pub fn list_by_capability(&self, dt: &DataType) -> Vec<String> {
+        self.sources
+            .iter()
+            .filter(|e| e.value().capabilities().contains(dt))
+            .map(|e| e.key().clone())
+            .collect()
     }
 }

@@ -1,8 +1,13 @@
 //! 数据源抽象层。
 //!
 //! `DataSource` trait 定义了所有数据源的统一接口。
+//! 数据源通过 `capabilities()` 声明支持哪些 `DataType`，
+//! 通过统一的 `fetch()` 方法按 `DataType` 分发到具体拉取逻辑。
+//!
+//! 新增数据类型时，数据源只需在 `capabilities()` 加声明 + `fetch()` 加分发，
+//! 不需要改 trait 定义本身。
+//!
 //! `DataSourceRegistry` 按 provider 名注册与查找，实现"可切换"。
-//! 内置 `MockDataSource` 生成假数据。
 
 pub mod mock;
 pub mod registry;
@@ -10,69 +15,26 @@ pub mod registry;
 pub use mock::MockDataSource;
 pub use registry::DataSourceRegistry;
 
-use crate::domain::{
-    Concept, FetchConceptParams, FetchFundHoldingParams, FetchFundListParams, FetchIndustryParams,
-    FetchKlineRequest, FundHolding, FundQuote, KlineQuote, StockConcept, StockIndustry, StockQuote,
-};
+use crate::domain::{DataType, FetchParams, FetchResult};
 use crate::error::Result;
 use async_trait::async_trait;
 
 /// 数据源统一抽象。
 ///
-/// 实现此 trait 即可接入新的数据源（如 Tushare、AKShare、Yahoo Finance 等），
-/// 然后在 `DataSourceRegistry` 中注册，任务通过 `provider` 字段选择数据源。
-///
-/// 新增数据类型时，在 trait 上加方法并给一个默认实现（返回不支持错误），
-/// 这样已有的数据源实现不需要改动，只在支持新类型的数据源里 override。
+/// 数据源与数据类型解耦：
+/// - 数据源声明自己支持哪些 `DataType`（capabilities）
+/// - 统一的 `fetch()` 入口按 `DataType` 分发
+/// - runner 在执行前校验数据源是否支持目标数据类型
 #[async_trait]
 pub trait DataSource: Send + Sync + 'static {
     /// 数据源名称，用于在 Registry 中查找（如 "mock"、"tushare"）
     fn name(&self) -> &str;
 
-    /// 拉取 A股股票列表
-    async fn fetch_stock_list(
-        &self,
-        params: &crate::domain::FetchStockListParams,
-    ) -> Result<Vec<StockQuote>>;
+    /// 声明支持的数据类型列表
+    fn capabilities(&self) -> &[DataType];
 
-    /// 拉取股票行业分类（更新 stocks.industry）
-    async fn fetch_industries(&self, _params: &FetchIndustryParams) -> Result<Vec<StockIndustry>> {
-        Err(crate::error::CoreError::DataSource(format!(
-            "data source '{}' does not support fetch_industries",
-            self.name()
-        )))
-    }
-
-    /// 拉取概念板块及成分股
-    async fn fetch_concepts(
-        &self,
-        _params: &FetchConceptParams,
-    ) -> Result<(Vec<Concept>, Vec<StockConcept>)> {
-        Err(crate::error::CoreError::DataSource(format!(
-            "data source '{}' does not support fetch_concepts",
-            self.name()
-        )))
-    }
-
-    /// 拉取基金列表
-    async fn fetch_fund_list(&self, _params: &FetchFundListParams) -> Result<Vec<FundQuote>> {
-        Err(crate::error::CoreError::DataSource(format!(
-            "data source '{}' does not support fetch_fund_list",
-            self.name()
-        )))
-    }
-
-    /// 拉取基金成分股（持仓明细）
-    async fn fetch_fund_holdings(
-        &self,
-        _params: &FetchFundHoldingParams,
-    ) -> Result<Vec<FundHolding>> {
-        Err(crate::error::CoreError::DataSource(format!(
-            "data source '{}' does not support fetch_fund_holdings",
-            self.name()
-        )))
-    }
-
-    /// 拉取单只股票的日K历史行情
-    async fn fetch_kline(&self, req: &FetchKlineRequest) -> Result<Vec<KlineQuote>>;
+    /// 统一拉取入口，按 `data_type` 分发到具体拉取逻辑。
+    ///
+    /// 数据源实现时内部 match `params.data_type`，调用对应的 API。
+    async fn fetch(&self, params: &FetchParams) -> Result<FetchResult>;
 }

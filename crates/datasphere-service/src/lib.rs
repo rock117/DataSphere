@@ -1,3 +1,4 @@
+pub mod collector;
 pub mod concept_service;
 pub mod fund_holding_service;
 pub mod fund_service;

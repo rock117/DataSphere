@@ -1,60 +1,50 @@
-use datasphere_core::domain::{
-    FetchConceptParams, FetchFundHoldingParams, FetchFundListParams, FetchIndustryParams,
-    FetchKlineParams, FetchStockListParams, RunStats, RunStatus, TaskType, TriggerType,
-};
+use datasphere_core::domain::{DataType, RunStats, RunStatus, TriggerType};
 use datasphere_core::DataSourceRegistry;
 use datasphere_entity::task;
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::concept_service::ConceptService;
-use crate::fund_holding_service::FundHoldingService;
-use crate::fund_service::FundService;
-use crate::kline_service::KlineService;
-use crate::stock_service::StockService;
+use crate::collector::{CollectContext, CollectorRegistry};
 use crate::task_service::TaskService;
 
-/// 任务执行器。
+/// 任务执行器（调度核心）。
 ///
-/// 持有 `DataSourceRegistry` 和 DB 连接，根据 task_type 路由到对应逻辑：
-/// 1. 从 Registry 获取 provider 对应的 DataSource
-/// 2. 调用 DataSource 拉取数据
-/// 3. 调用 service 层 upsert 落库
-/// 4. 记录 task_run（含成功/失败统计、耗时、进度）
+/// 职责：
+/// - 创建/完成 task_run 记录
+/// - 任务级互斥锁（同一 task 不允许并发）
+/// - 进度更新 + 取消检查（通过 CollectContext 回调传给 Collector）
+/// - 按 DataType 查找 Collector 并执行
 ///
-/// 执行策略：
-/// - 单只股票失败不中断整个任务，继续处理其他，最后汇总为 RunStats
-/// - 循环中定期检查 cancel 标志，被取消时提前结束并标记 Cancelled
+/// **不关心具体采集逻辑**——每种数据类型的采集由对应的 Collector 实现，
+/// runner 通过 CollectorRegistry 查找，加新数据类型不需要改 runner。
 pub struct TaskRunner {
     db: DatabaseConnection,
     registry: Arc<DataSourceRegistry>,
-    /// 任务级互斥锁，防止同一任务并发执行
+    collectors: Arc<CollectorRegistry>,
     locks: dashmap::DashMap<i64, ()>,
 }
 
 impl TaskRunner {
-    pub fn new(db: DatabaseConnection, registry: Arc<DataSourceRegistry>) -> Self {
+    pub fn new(
+        db: DatabaseConnection,
+        registry: Arc<DataSourceRegistry>,
+        collectors: Arc<CollectorRegistry>,
+    ) -> Self {
         Self {
             db,
             registry,
+            collectors,
             locks: dashmap::DashMap::new(),
         }
     }
 
     /// 执行指定任务。
-    ///
-    /// - 创建 Running 状态的 task_run
-    /// - 获取任务级锁（同一 task 不允许并发）
-    /// - 按 task_type 路由执行，累计 RunStats，更新进度，检查取消
-    /// - 根据 RunStats 推断最终状态（Success / Partial / Failed / Cancelled）并更新 task_run
-    /// 返回 (run_id, 最终状态)
     pub async fn run(&self, task_model: &task::Model, trigger: TriggerType) -> anyhow::Result<i64> {
-        // 创建运行记录
         let run = TaskService::create_run(&self.db, task_model.id, trigger).await?;
         let run_id = run.id;
 
-        // 尝试获取任务级锁
+        // 任务级互斥锁
         if self.locks.contains_key(&task_model.id) {
             let msg = format!("task {} is already running", task_model.id);
             TaskService::finish_run(
@@ -73,20 +63,18 @@ impl TaskRunner {
         let result = self.execute_inner(task_model, run_id).await;
         let duration_ms = started.elapsed().as_millis() as u64;
 
-        // 释放锁
         self.locks.remove(&task_model.id);
 
         match result {
             Ok(mut stats) => {
                 stats.duration_ms = duration_ms;
-                // 检查是否被取消
                 let cancelled = TaskService::is_cancel_requested(&self.db, run_id)
                     .await
                     .unwrap_or(false);
                 let status = if cancelled && stats.success == 0 {
                     RunStatus::Cancelled
                 } else if cancelled {
-                    RunStatus::Partial // 已有部分成功，取消后记为 Partial
+                    RunStatus::Partial
                 } else {
                     stats.derive_status()
                 };
@@ -132,300 +120,61 @@ impl TaskRunner {
         }
     }
 
-    /// 内部执行逻辑：解析 task_type 与 params，调用对应数据源。
-    ///
-    /// 单个数据单元（单只股票 / 单次拉取）失败不中断，计入 RunStats 后继续。
-    /// 每轮循环检查 cancel 标志。
+    /// 内部执行：查找 Collector + 校验数据源能力 + 构造上下文 + 执行
     async fn execute_inner(
         &self,
         task_model: &task::Model,
         run_id: i64,
     ) -> anyhow::Result<RunStats> {
-        let task_type: TaskType = task_model.task_type.parse()?;
+        let dt: DataType = task_model.task_type.parse()?;
         let source = self.registry.get(&task_model.provider)?;
-        let mut stats = RunStats::default();
 
-        match task_type {
-            TaskType::FetchStockList => {
-                let params: FetchStockListParams = task_model
-                    .params
-                    .as_ref()
-                    .map(|v| serde_json::from_value(v.clone()))
-                    .transpose()?
-                    .unwrap_or_default();
-
-                // 单次拉取，total=1
-                TaskService::update_progress(&self.db, run_id, 1, 0)
-                    .await
-                    .ok();
-
-                tracing::info!("Fetching stock list via provider={}", task_model.provider);
-                if Self::is_cancelled(&self.db, run_id).await {
-                    return Ok(stats);
-                }
-                match source.fetch_stock_list(&params).await {
-                    Ok(quotes) => match StockService::upsert_many(&self.db, &quotes).await {
-                        Ok(n) => stats.record_success(n),
-                        Err(e) => stats.record_failure(format!("upsert stock list: {e:#}")),
-                    },
-                    Err(e) => stats.record_failure(format!("fetch stock list: {e:#}")),
-                }
-                TaskService::update_progress(&self.db, run_id, 1, 1)
-                    .await
-                    .ok();
-                tracing::info!(
-                    "Stock list done: success={} failed={}",
-                    stats.success,
-                    stats.failed
-                );
-            }
-            TaskType::FetchIndustry => {
-                let params: FetchIndustryParams = task_model
-                    .params
-                    .as_ref()
-                    .map(|v| serde_json::from_value(v.clone()))
-                    .transpose()?
-                    .unwrap_or_default();
-
-                TaskService::update_progress(&self.db, run_id, 1, 0)
-                    .await
-                    .ok();
-
-                tracing::info!("Fetching industries via provider={}", task_model.provider);
-                if Self::is_cancelled(&self.db, run_id).await {
-                    return Ok(stats);
-                }
-                match source.fetch_industries(&params).await {
-                    Ok(items) => match StockService::update_industries(&self.db, &items).await {
-                        Ok(n) => stats.record_success(n),
-                        Err(e) => stats.record_failure(format!("update industries: {e:#}")),
-                    },
-                    Err(e) => stats.record_failure(format!("fetch industries: {e:#}")),
-                }
-                TaskService::update_progress(&self.db, run_id, 1, 1)
-                    .await
-                    .ok();
-                tracing::info!(
-                    "Industry done: success={} failed={}",
-                    stats.success,
-                    stats.failed
-                );
-            }
-            TaskType::FetchConcept => {
-                let params: FetchConceptParams = task_model
-                    .params
-                    .as_ref()
-                    .map(|v| serde_json::from_value(v.clone()))
-                    .transpose()?
-                    .unwrap_or_default();
-
-                TaskService::update_progress(&self.db, run_id, 1, 0)
-                    .await
-                    .ok();
-
-                tracing::info!("Fetching concepts via provider={}", task_model.provider);
-                if Self::is_cancelled(&self.db, run_id).await {
-                    return Ok(stats);
-                }
-                match source.fetch_concepts(&params).await {
-                    Ok((concepts, stock_concepts)) => {
-                        match ConceptService::upsert_all(&self.db, &concepts, &stock_concepts).await
-                        {
-                            Ok(n) => stats.record_success(n),
-                            Err(e) => stats.record_failure(format!("upsert concepts: {e:#}")),
-                        }
-                    }
-                    Err(e) => stats.record_failure(format!("fetch concepts: {e:#}")),
-                }
-                TaskService::update_progress(&self.db, run_id, 1, 1)
-                    .await
-                    .ok();
-                tracing::info!(
-                    "Concept done: success={} failed={}",
-                    stats.success,
-                    stats.failed
-                );
-            }
-            TaskType::FetchFundList => {
-                let params: FetchFundListParams = task_model
-                    .params
-                    .as_ref()
-                    .map(|v| serde_json::from_value(v.clone()))
-                    .transpose()?
-                    .unwrap_or_default();
-
-                TaskService::update_progress(&self.db, run_id, 1, 0)
-                    .await
-                    .ok();
-
-                tracing::info!("Fetching fund list via provider={}", task_model.provider);
-                if Self::is_cancelled(&self.db, run_id).await {
-                    return Ok(stats);
-                }
-                match source.fetch_fund_list(&params).await {
-                    Ok(quotes) => match FundService::upsert_many(&self.db, &quotes).await {
-                        Ok(n) => stats.record_success(n),
-                        Err(e) => stats.record_failure(format!("upsert fund list: {e:#}")),
-                    },
-                    Err(e) => stats.record_failure(format!("fetch fund list: {e:#}")),
-                }
-                TaskService::update_progress(&self.db, run_id, 1, 1)
-                    .await
-                    .ok();
-                tracing::info!(
-                    "Fund list done: success={} failed={}",
-                    stats.success,
-                    stats.failed
-                );
-            }
-            TaskType::FetchFundHolding => {
-                let params: FetchFundHoldingParams = task_model
-                    .params
-                    .as_ref()
-                    .map(|v| serde_json::from_value(v.clone()))
-                    .transpose()?
-                    .unwrap_or_default();
-
-                // codes 为空时取全市场基金列表
-                let default_codes = match FundService::list_all_codes(&self.db).await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        stats.record_failure(format!("load fund codes: {e:#}"));
-                        return Ok(stats);
-                    }
-                };
-                let codes: Vec<String> = if params.codes.is_empty() {
-                    default_codes
-                } else {
-                    params.codes.clone()
-                };
-                let total = codes.len();
-                TaskService::update_progress(&self.db, run_id, total, 0)
-                    .await
-                    .ok();
-
-                let report_date = params
-                    .report_date
-                    .unwrap_or_else(|| chrono::Local::now().date_naive());
-
-                for (i, fund_code) in codes.iter().enumerate() {
-                    if Self::is_cancelled(&self.db, run_id).await {
-                        tracing::info!(
-                            "task {} run {} cancelled at {}/{}",
-                            task_model.id,
-                            run_id,
-                            i,
-                            total
-                        );
-                        break;
-                    }
-                    tracing::info!(
-                        "Fetching fund holdings [{}/{}] fund_code={} report_date={}",
-                        i + 1,
-                        total,
-                        fund_code,
-                        report_date
-                    );
-                    let req = FetchFundHoldingParams {
-                        codes: vec![fund_code.clone()],
-                        report_date: Some(report_date),
-                    };
-                    match source.fetch_fund_holdings(&req).await {
-                        Ok(holdings) => {
-                            match FundHoldingService::upsert_many(&self.db, &holdings).await {
-                                Ok(n) => stats.record_success(n),
-                                Err(e) => stats.record_failure(format!(
-                                    "upsert fund holdings code={}: {e:#}",
-                                    fund_code
-                                )),
-                            }
-                        }
-                        Err(e) => stats.record_failure(format!(
-                            "fetch fund holdings code={}: {e:#}",
-                            fund_code
-                        )),
-                    }
-                    TaskService::update_progress(&self.db, run_id, total, i + 1)
-                        .await
-                        .ok();
-                }
-                tracing::info!(
-                    "Fund holdings done: success={} failed={}",
-                    stats.success,
-                    stats.failed
-                );
-            }
-            TaskType::FetchKline => {
-                let params: FetchKlineParams = task_model
-                    .params
-                    .as_ref()
-                    .map(|v| serde_json::from_value(v.clone()))
-                    .transpose()?
-                    .unwrap_or_default();
-
-                // codes 为空时取全市场股票列表
-                let default_codes = match StockService::list_all_codes(&self.db).await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        stats.record_failure(format!("load stock codes: {e:#}"));
-                        return Ok(stats);
-                    }
-                };
-                let requests = params.to_requests(&default_codes);
-                let total = requests.len();
-                TaskService::update_progress(&self.db, run_id, total, 0)
-                    .await
-                    .ok();
-
-                for (i, req) in requests.iter().enumerate() {
-                    // 检查取消
-                    if Self::is_cancelled(&self.db, run_id).await {
-                        tracing::info!(
-                            "task {} run {} cancelled at {}/{}",
-                            task_model.id,
-                            run_id,
-                            i,
-                            total
-                        );
-                        break;
-                    }
-                    tracing::info!(
-                        "Fetching kline [{}/{}] code={} start={} end={}",
-                        i + 1,
-                        total,
-                        req.code,
-                        req.start,
-                        req.end
-                    );
-                    match source.fetch_kline(req).await {
-                        Ok(quotes) => match KlineService::upsert_many(&self.db, &quotes).await {
-                            Ok(n) => stats.record_success(n),
-                            Err(e) => stats
-                                .record_failure(format!("upsert kline code={}: {e:#}", req.code)),
-                        },
-                        Err(e) => {
-                            stats.record_failure(format!("fetch kline code={}: {e:#}", req.code))
-                        }
-                    }
-                    TaskService::update_progress(&self.db, run_id, total, i + 1)
-                        .await
-                        .ok();
-                }
-                tracing::info!(
-                    "Kline batch done: success={} failed={}",
-                    stats.success,
-                    stats.failed
-                );
-            }
+        // 校验数据源是否支持该数据类型
+        if !source.capabilities().contains(&dt) {
+            anyhow::bail!("data source '{}' does not support {}", source.name(), dt);
         }
 
-        Ok(stats)
-    }
+        // 查找 Collector
+        let collector = self
+            .collectors
+            .get(&dt)
+            .ok_or_else(|| anyhow::anyhow!("no collector registered for {}", dt))?;
 
-    /// 检查某次运行是否被请求取消
-    async fn is_cancelled(db: &DatabaseConnection, run_id: i64) -> bool {
-        TaskService::is_cancel_requested(db, run_id)
-            .await
-            .unwrap_or(false)
+        // 构造上下文（进度更新和取消检查通过闭包传递）
+        let db = self.db.clone();
+
+        // 进度更新：spawn 异步任务执行（闭包是 sync 的）
+        let db_for_progress = self.db.clone();
+        let update_progress: Arc<dyn Fn(usize, usize) + Send + Sync> =
+            Arc::new(move |total, processed| {
+                let db = db_for_progress.clone();
+                tokio::spawn(async move {
+                    let _ = TaskService::update_progress(&db, run_id, total, processed).await;
+                });
+            });
+
+        let db_for_cancel = self.db.clone();
+        let is_cancelled: Arc<dyn Fn() -> bool + Send + Sync> = Arc::new(move || {
+            // 同步检查无法直接调 async，用 try_block 方式
+            // 简化：返回 false，取消检查由 Collector 通过其他方式
+            // 实际方案：用 tokio::task::block_in_place + Handle::current().block_on
+            let db = db_for_cancel.clone();
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current()
+                    .block_on(TaskService::is_cancel_requested(&db, run_id))
+                    .unwrap_or(false)
+            })
+        });
+
+        let ctx = CollectContext {
+            db,
+            source,
+            params: task_model.params.clone(),
+            run_id,
+            update_progress,
+            is_cancelled,
+        };
+
+        collector.collect(&ctx).await
     }
 }
